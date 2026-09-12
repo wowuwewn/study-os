@@ -35,49 +35,6 @@ export const SAMPLE_SEED_STATEMENTS: SeedStatement[] = [
       VALUES (?1, ?2, NULL, ?3, ?4, ?5, ?6, ?7, ?7)`,
     values: [id, "seed:source:manual", name, code, location, colorToken, CREATED_AT],
   })),
-  ...[
-    [
-      "seed:event:nlp",
-      "seed:course:nlp",
-      "class",
-      "자연어처리",
-      "2026-09-11T00:00:00.000Z",
-      "2026-09-11T01:15:00.000Z",
-      "미래관 503호",
-    ],
-    [
-      "seed:event:open-source-ai",
-      "seed:course:open-source-ai",
-      "class",
-      "오픈소스AI응용",
-      "2026-09-11T03:30:00.000Z",
-      "2026-09-11T04:45:00.000Z",
-      "e-Campus",
-    ],
-    [
-      "seed:event:multimedia",
-      "seed:course:multimedia",
-      "class",
-      "멀티미디어신호처리",
-      "2026-09-11T06:00:00.000Z",
-      "2026-09-11T07:15:00.000Z",
-      "공학관 305호",
-    ],
-    [
-      "seed:event:personal",
-      null,
-      "personal",
-      "개인 일정",
-      "2026-09-11T09:30:00.000Z",
-      null,
-      null,
-    ],
-  ].map<SeedStatement>(([id, courseId, eventType, title, startAt, endAt, location]) => ({
-    sql: `INSERT OR IGNORE INTO events
-      (id, source_id, course_id, external_id, event_type, title, start_at, end_at, location, is_fixed, notes, created_at, updated_at)
-      VALUES (?1, ?2, ?3, NULL, ?4, ?5, ?6, ?7, ?8, 1, NULL, ?9, ?9)`,
-    values: [id, "seed:source:manual", courseId, eventType, title, startAt, endAt, location, CREATED_AT],
-  })),
   {
     sql: `INSERT OR IGNORE INTO assignments
       (id, source_id, course_id, external_id, title, description, due_at, points, submission_type, status, submitted_at, graded_at, created_at, updated_at)

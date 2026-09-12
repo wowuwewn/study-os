@@ -5,6 +5,10 @@ import type {
   EventType,
   FocusSession,
   FocusSessionStatus,
+  RecurringScheduleException,
+  RecurringScheduleRule,
+  ScheduleExceptionStatus,
+  Semester,
   Source,
   SourceKind,
   StudyEvent,
@@ -30,6 +34,48 @@ export type CourseRow = {
   code: string | null;
   location: string | null;
   color_token: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SemesterRow = {
+  id: string;
+  source_id: string | null;
+  external_id: string | null;
+  name: string;
+  starts_on: string;
+  ends_on: string;
+  timezone: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type RecurringScheduleRuleRow = {
+  id: string;
+  semester_id: string;
+  course_id: string;
+  source_id: string | null;
+  external_id: string | null;
+  weekday: number;
+  start_local_time: string;
+  end_local_time: string;
+  location: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type RecurringScheduleExceptionRow = {
+  id: string;
+  recurring_rule_id: string;
+  source_id: string | null;
+  external_id: string | null;
+  occurrence_on: string;
+  status: ScheduleExceptionStatus;
+  replacement_start_at: string | null;
+  replacement_end_at: string | null;
+  title_override: string | null;
+  location_override: string | null;
+  notes: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -128,6 +174,52 @@ export const mapCourse = (row: CourseRow): Course => ({
   code: row.code,
   location: row.location,
   colorToken: row.color_token,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+});
+
+export const mapSemester = (row: SemesterRow): Semester => ({
+  id: row.id,
+  sourceId: row.source_id,
+  externalId: row.external_id,
+  name: row.name,
+  startsOn: row.starts_on,
+  endsOn: row.ends_on,
+  timezone: row.timezone,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+});
+
+export const mapRecurringScheduleRule = (
+  row: RecurringScheduleRuleRow,
+): RecurringScheduleRule => ({
+  id: row.id,
+  semesterId: row.semester_id,
+  courseId: row.course_id,
+  sourceId: row.source_id,
+  externalId: row.external_id,
+  weekday: row.weekday,
+  startLocalTime: row.start_local_time,
+  endLocalTime: row.end_local_time,
+  location: row.location,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+});
+
+export const mapRecurringScheduleException = (
+  row: RecurringScheduleExceptionRow,
+): RecurringScheduleException => ({
+  id: row.id,
+  recurringRuleId: row.recurring_rule_id,
+  sourceId: row.source_id,
+  externalId: row.external_id,
+  occurrenceOn: row.occurrence_on,
+  status: row.status,
+  replacementStartAt: row.replacement_start_at,
+  replacementEndAt: row.replacement_end_at,
+  titleOverride: row.title_override,
+  locationOverride: row.location_override,
+  notes: row.notes,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });

@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { emitTo } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import type { StudyEvent, StudyTask, TaskStep } from "./domain/models";
+import type { ScheduleOccurrence, StudyTask, TaskStep } from "./domain/models";
 import { setTaskStepCompleted, FOCUS_COMMAND_EVENT } from "./data/studyData";
 import { useStudyDashboard } from "./data/useStudyDashboard";
 import { showQuickAddWindow } from "./features/quick-add/window";
@@ -68,8 +68,6 @@ function MainIcon({ name }: { name: MainIconName }) {
   );
 }
 
-const BASELINE_DUE_AT = Date.parse("2026-09-11T14:59:00.000Z");
-
 function formatLocalTime(value: string) {
   return new Intl.DateTimeFormat("ko-KR", {
     hour: "2-digit",
@@ -78,17 +76,25 @@ function formatLocalTime(value: string) {
   }).format(new Date(value));
 }
 
-function formatEventTime(event: StudyEvent) {
+function formatEventTime(event: ScheduleOccurrence) {
   const start = formatLocalTime(event.startAt);
   return event.endAt ? `${start} – ${formatLocalTime(event.endAt)}` : start;
 }
 
-function getTaskDuePresentation(task: StudyTask) {
+function startOfLocalDay(value: Date) {
+  const date = new Date(value);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function getTaskDuePresentation(task: StudyTask, now: Date) {
   if (!task.dueAt && task.estimatedMinutes) {
     return { due: `${task.estimatedMinutes}분`, tone: "duration" };
   }
   if (!task.dueAt) return { due: "", tone: "duration" };
-  const days = Math.max(0, Math.round((Date.parse(task.dueAt) - BASELINE_DUE_AT) / 86_400_000));
+  const dueDay = startOfLocalDay(new Date(task.dueAt));
+  const today = startOfLocalDay(now);
+  const days = Math.max(0, Math.round((dueDay.getTime() - today.getTime()) / 86_400_000));
   return days === 0
     ? { due: "오늘", tone: "today" }
     : { due: `D-${days}`, tone: "deadline" };
@@ -116,7 +122,13 @@ const LOADING_STEPS = Array.from({ length: 4 }, (_, index) => ({
 
 export default function MainWindow() {
   const [memo, setMemo] = useState("");
+  const [now, setNow] = useState(() => new Date());
   const { dashboard, error } = useStudyDashboard();
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (error) console.error("Study OS data load failed", error);
@@ -125,8 +137,8 @@ export default function MainWindow() {
   const quest = dashboard?.currentQuest;
   const timelineEvents = dashboard
     ? dashboard.timelineEvents
-        .filter((event) => event.eventType !== "personal")
-        .slice(0, 3)
+        .filter((event) => Date.parse(event.startAt) <= now.getTime())
+        .slice(-3)
         .map((event) => ({
           id: event.id,
           time: formatEventTime(event),
@@ -134,13 +146,18 @@ export default function MainWindow() {
           place: event.location ?? "",
         }))
     : LOADING_EVENTS;
-  const nextEvent = dashboard?.timelineEvents.find((event) => event.eventType === "personal");
+  const nextEvent = dashboard?.timelineEvents.find((event) => Date.parse(event.startAt) > now.getTime());
   const todayTasks = dashboard
-    ? dashboard.todayTasks.map((task) => ({ id: task.id, title: task.title, ...getTaskDuePresentation(task) }))
+    ? dashboard.todayTasks.map((task) => ({ id: task.id, title: task.title, ...getTaskDuePresentation(task, now) }))
     : LOADING_TASKS;
   const checklist: Array<Pick<TaskStep, "id" | "title" | "isCompleted">> =
     quest?.steps ?? LOADING_STEPS;
   const isRunning = dashboard?.activeFocusSession?.status === "running";
+  const dateHeading = new Intl.DateTimeFormat("ko-KR", {
+    month: "long",
+    day: "numeric",
+  }).format(now);
+  const weekdayHeading = new Intl.DateTimeFormat("ko-KR", { weekday: "long" }).format(now);
 
   const minimizeWindow = () => getCurrentWindow().minimize().catch(console.error);
   const toggleMaximize = () =>
@@ -196,8 +213,8 @@ export default function MainWindow() {
       <div className="main-content">
         <section className="today-pane" aria-labelledby="today-heading">
           <header className="today-heading">
-            <h1 id="today-heading">9월 11일</h1>
-            <span>금요일</span>
+            <h1 id="today-heading">{dateHeading}</h1>
+            <span>{weekdayHeading}</span>
           </header>
 
           <ol className="timeline" aria-label="오늘의 일정">
@@ -212,7 +229,7 @@ export default function MainWindow() {
 
             <li className="timeline-item timeline-item--now">
               <span className="timeline-dot" aria-hidden="true" />
-              <time>17:24</time>
+              <time>{formatLocalTime(now.toISOString())}</time>
               <strong>지금</strong>
             </li>
 

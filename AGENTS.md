@@ -20,6 +20,7 @@
 - Persist timestamps as UTC ISO 8601 strings and convert them to local time only at the UI boundary.
 - Database schema changes require numbered migrations under `src-tauri/migrations/`.
 - Quick Add natural-language parsing must remain local and deterministic; do not use AI or remote APIs.
+- Recurring schedule rules are the source of truth; model one-date cancellations, moves, or overrides as exceptions instead of editing the rule.
 - Remove temporary files created during feature work before that work ends.
 - Remove deprecated implementations only after the replacement is approved and references are checked.
 - Do not accumulate unused duplicate components or files.

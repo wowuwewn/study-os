@@ -6,6 +6,7 @@ export type EventType = "class" | "exam" | "personal" | "study_block" | "meeting
 export type AssignmentStatus = "open" | "submitted" | "graded" | "cancelled";
 export type StudyTaskStatus = "todo" | "doing" | "paused" | "done" | "cancelled";
 export type FocusSessionStatus = "running" | "paused" | "completed" | "cancelled";
+export type ScheduleExceptionStatus = "cancelled" | "moved" | "overridden";
 
 export type Source = {
   id: EntityId;
@@ -24,6 +25,48 @@ export type Course = {
   code: string | null;
   location: string | null;
   colorToken: string | null;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+};
+
+export type Semester = {
+  id: EntityId;
+  sourceId: EntityId | null;
+  externalId: string | null;
+  name: string;
+  startsOn: string;
+  endsOn: string;
+  timezone: string;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+};
+
+export type RecurringScheduleRule = {
+  id: EntityId;
+  semesterId: EntityId;
+  courseId: EntityId;
+  sourceId: EntityId | null;
+  externalId: string | null;
+  weekday: number;
+  startLocalTime: string;
+  endLocalTime: string;
+  location: string | null;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+};
+
+export type RecurringScheduleException = {
+  id: EntityId;
+  recurringRuleId: EntityId;
+  sourceId: EntityId | null;
+  externalId: string | null;
+  occurrenceOn: string;
+  status: ScheduleExceptionStatus;
+  replacementStartAt: IsoDateTime | null;
+  replacementEndAt: IsoDateTime | null;
+  titleOverride: string | null;
+  locationOverride: string | null;
+  notes: string | null;
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
 };
@@ -105,10 +148,17 @@ export type FocusSession = {
 };
 
 export type StudyDashboard = {
-  timelineEvents: StudyEvent[];
+  timelineEvents: ScheduleOccurrence[];
   currentQuest: StudyTask;
   todayTasks: StudyTask[];
   activeFocusSession: FocusSession | null;
+};
+
+export type ScheduleOccurrence = Omit<StudyEvent, "createdAt" | "updatedAt"> & {
+  origin: "event" | "recurring";
+  recurringRuleId: EntityId | null;
+  exceptionId: EntityId | null;
+  semesterId: EntityId | null;
 };
 
 export type NewCourse = Pick<Course, "name"> &

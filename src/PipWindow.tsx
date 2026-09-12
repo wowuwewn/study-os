@@ -117,7 +117,7 @@ export default function PipWindow() {
   const totalSeconds = (currentQuest?.estimatedMinutes ?? 45) * 60;
   const progress = Math.min(100, (elapsedSeconds / totalSeconds) * 100);
   const formattedProgress = formatElapsed(elapsedSeconds);
-  const nextEvent = dashboard?.timelineEvents.find((event) => event.eventType === "personal");
+  const nextEvent = dashboard?.timelineEvents.find((event) => Date.parse(event.startAt) > Date.now());
   const visibleSteps = currentQuest?.steps.slice(0, 2) ?? [];
 
   elapsedSecondsRef.current = elapsedSeconds;

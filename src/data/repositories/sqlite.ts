@@ -3,6 +3,9 @@ import type {
   Assignment,
   Course,
   FocusSession,
+  RecurringScheduleException,
+  RecurringScheduleRule,
+  Semester,
   Source,
   StudyEvent,
   StudyTask,
@@ -21,6 +24,9 @@ import {
   mapCourse,
   mapEvent,
   mapFocusSession,
+  mapRecurringScheduleException,
+  mapRecurringScheduleRule,
+  mapSemester,
   mapSource,
   mapStudyTask,
   mapTaskStep,
@@ -28,6 +34,9 @@ import {
   type CourseRow,
   type EventRow,
   type FocusSessionRow,
+  type RecurringScheduleExceptionRow,
+  type RecurringScheduleRuleRow,
+  type SemesterRow,
   type SourceRow,
   type StudyTaskRow,
   type TaskStepRow,
@@ -40,6 +49,12 @@ import type {
   EventInput,
   EventRepository,
   FocusSessionRepository,
+  RecurringScheduleExceptionInput,
+  RecurringScheduleRuleInput,
+  RecurringScheduleRepository,
+  ScheduleExceptionRepository,
+  SemesterInput,
+  SemesterRepository,
   SourceRepository,
   StudyTaskInput,
   StudyTaskRepository,
@@ -108,6 +123,194 @@ export class SqliteCourseRepository implements CourseRepository {
   async remove(id: string): Promise<void> {
     const database = await getDatabase();
     await database.execute("DELETE FROM courses WHERE id = ?1", [id]);
+  }
+}
+
+export class SqliteSemesterRepository implements SemesterRepository {
+  async list(): Promise<Semester[]> {
+    const database = await getDatabase();
+    const rows = await database.select<SemesterRow[]>(
+      "SELECT * FROM semesters ORDER BY starts_on, name",
+    );
+    return rows.map(mapSemester);
+  }
+
+  async get(id: string): Promise<Semester | null> {
+    const database = await getDatabase();
+    const row = await first<SemesterRow>(database, "SELECT * FROM semesters WHERE id = ?1", [id]);
+    return row ? mapSemester(row) : null;
+  }
+
+  async save(input: SemesterInput): Promise<Semester> {
+    const database = await getDatabase();
+    const id = input.id ?? createEntityId();
+    const now = utcNow();
+    await database.execute(
+      `INSERT INTO semesters
+        (id, source_id, external_id, name, starts_on, ends_on, timezone, created_at, updated_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)
+       ON CONFLICT(id) DO UPDATE SET
+        source_id=excluded.source_id, external_id=excluded.external_id, name=excluded.name,
+        starts_on=excluded.starts_on, ends_on=excluded.ends_on, timezone=excluded.timezone,
+        updated_at=excluded.updated_at`,
+      [
+        id,
+        input.sourceId,
+        input.externalId,
+        input.name,
+        input.startsOn,
+        input.endsOn,
+        input.timezone,
+        now,
+      ],
+    );
+    const saved = await this.get(id);
+    if (!saved) throw new Error("Semester save failed");
+    return saved;
+  }
+
+  async remove(id: string): Promise<void> {
+    const database = await getDatabase();
+    await database.execute("DELETE FROM semesters WHERE id = ?1", [id]);
+  }
+}
+
+export class SqliteRecurringScheduleRepository implements RecurringScheduleRepository {
+  async list(): Promise<RecurringScheduleRule[]> {
+    const database = await getDatabase();
+    const rows = await database.select<RecurringScheduleRuleRow[]>(
+      "SELECT * FROM recurring_schedule_rules ORDER BY weekday, start_local_time",
+    );
+    return rows.map(mapRecurringScheduleRule);
+  }
+
+  async listForSemester(semesterId: string): Promise<RecurringScheduleRule[]> {
+    const database = await getDatabase();
+    const rows = await database.select<RecurringScheduleRuleRow[]>(
+      `SELECT * FROM recurring_schedule_rules
+       WHERE semester_id = ?1 ORDER BY weekday, start_local_time`,
+      [semesterId],
+    );
+    return rows.map(mapRecurringScheduleRule);
+  }
+
+  async get(id: string): Promise<RecurringScheduleRule | null> {
+    const database = await getDatabase();
+    const row = await first<RecurringScheduleRuleRow>(
+      database,
+      "SELECT * FROM recurring_schedule_rules WHERE id = ?1",
+      [id],
+    );
+    return row ? mapRecurringScheduleRule(row) : null;
+  }
+
+  async save(input: RecurringScheduleRuleInput): Promise<RecurringScheduleRule> {
+    const database = await getDatabase();
+    const id = input.id ?? createEntityId();
+    const now = utcNow();
+    await database.execute(
+      `INSERT INTO recurring_schedule_rules
+        (id, semester_id, course_id, source_id, external_id, weekday, start_local_time, end_local_time, location, created_at, updated_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?10)
+       ON CONFLICT(id) DO UPDATE SET
+        semester_id=excluded.semester_id, course_id=excluded.course_id,
+        source_id=excluded.source_id, external_id=excluded.external_id,
+        weekday=excluded.weekday, start_local_time=excluded.start_local_time,
+        end_local_time=excluded.end_local_time, location=excluded.location,
+        updated_at=excluded.updated_at`,
+      [
+        id,
+        input.semesterId,
+        input.courseId,
+        input.sourceId,
+        input.externalId,
+        input.weekday,
+        input.startLocalTime,
+        input.endLocalTime,
+        input.location,
+        now,
+      ],
+    );
+    const saved = await this.get(id);
+    if (!saved) throw new Error("Recurring schedule rule save failed");
+    return saved;
+  }
+
+  async remove(id: string): Promise<void> {
+    const database = await getDatabase();
+    await database.execute("DELETE FROM recurring_schedule_rules WHERE id = ?1", [id]);
+  }
+}
+
+export class SqliteScheduleExceptionRepository implements ScheduleExceptionRepository {
+  async list(): Promise<RecurringScheduleException[]> {
+    const database = await getDatabase();
+    const rows = await database.select<RecurringScheduleExceptionRow[]>(
+      "SELECT * FROM recurring_schedule_exceptions ORDER BY occurrence_on",
+    );
+    return rows.map(mapRecurringScheduleException);
+  }
+
+  async listForRule(recurringRuleId: string): Promise<RecurringScheduleException[]> {
+    const database = await getDatabase();
+    const rows = await database.select<RecurringScheduleExceptionRow[]>(
+      `SELECT * FROM recurring_schedule_exceptions
+       WHERE recurring_rule_id = ?1 ORDER BY occurrence_on`,
+      [recurringRuleId],
+    );
+    return rows.map(mapRecurringScheduleException);
+  }
+
+  async get(id: string): Promise<RecurringScheduleException | null> {
+    const database = await getDatabase();
+    const row = await first<RecurringScheduleExceptionRow>(
+      database,
+      "SELECT * FROM recurring_schedule_exceptions WHERE id = ?1",
+      [id],
+    );
+    return row ? mapRecurringScheduleException(row) : null;
+  }
+
+  async save(input: RecurringScheduleExceptionInput): Promise<RecurringScheduleException> {
+    const database = await getDatabase();
+    const id = input.id ?? createEntityId();
+    const now = utcNow();
+    await database.execute(
+      `INSERT INTO recurring_schedule_exceptions
+        (id, recurring_rule_id, source_id, external_id, occurrence_on, status,
+         replacement_start_at, replacement_end_at, title_override, location_override,
+         notes, created_at, updated_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?12)
+       ON CONFLICT(id) DO UPDATE SET
+        recurring_rule_id=excluded.recurring_rule_id, source_id=excluded.source_id,
+        external_id=excluded.external_id, occurrence_on=excluded.occurrence_on,
+        status=excluded.status, replacement_start_at=excluded.replacement_start_at,
+        replacement_end_at=excluded.replacement_end_at,
+        title_override=excluded.title_override, location_override=excluded.location_override,
+        notes=excluded.notes, updated_at=excluded.updated_at`,
+      [
+        id,
+        input.recurringRuleId,
+        input.sourceId,
+        input.externalId,
+        input.occurrenceOn,
+        input.status,
+        input.replacementStartAt,
+        input.replacementEndAt,
+        input.titleOverride,
+        input.locationOverride,
+        input.notes,
+        now,
+      ],
+    );
+    const saved = await this.get(id);
+    if (!saved) throw new Error("Recurring schedule exception save failed");
+    return saved;
+  }
+
+  async remove(id: string): Promise<void> {
+    const database = await getDatabase();
+    await database.execute("DELETE FROM recurring_schedule_exceptions WHERE id = ?1", [id]);
   }
 }
 

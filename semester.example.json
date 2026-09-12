@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "semester": {
+    "externalId": "example-2026-fall",
+    "name": "2026년 2학기",
+    "startsOn": "2026-09-01",
+    "endsOn": "2026-12-18",
+    "timezone": "Asia/Seoul"
+  },
+  "courses": [
+    {
+      "externalId": "example-natural-language-processing",
+      "name": "자연어처리",
+      "code": "NLP",
+      "location": "미래관 503호",
+      "colorToken": "powder-blue",
+      "meetings": [
+        {
+          "externalId": "example-nlp-friday",
+          "weekday": 5,
+          "startLocalTime": "09:00",
+          "endLocalTime": "10:15",
+          "location": "미래관 503호"
+        }
+      ]
+    },
+    {
+      "externalId": "example-open-source-ai",
+      "name": "오픈소스AI응용",
+      "code": "OSAI",
+      "location": "e-Campus",
+      "colorToken": "sage",
+      "meetings": [
+        {
+          "externalId": "example-osai-friday",
+          "weekday": 5,
+          "startLocalTime": "12:30",
+          "endLocalTime": "13:45"
+        }
+      ]
+    }
+  ]
+}

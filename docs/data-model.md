@@ -6,6 +6,9 @@ Study OS is a local-first application. The SQLite database is stored by Tauri in
 
 - **Source** records where imported or manually entered data originated. It stores no credentials. Future adapters may use non-secret integration metadata.
 - **Course** is the academic context shared by events, assignments, and study tasks.
+- **Semester** owns an academic date range and IANA timezone without tying the app to one particular term.
+- **RecurringScheduleRule** stores a course meeting's weekday and local wall-clock time for a semester.
+- **RecurringScheduleException** changes one dated occurrence without mutating its rule.
 - **Event** is something fixed on the time axis: a class, exam, meeting, personal event, or reserved study block.
 - **Assignment** is an external obligation, usually with a due date and submission lifecycle.
 - **StudyTask** is a concrete action the learner can perform. It may optionally be derived from an assignment, but it also supports independent tasks.
@@ -18,7 +21,11 @@ erDiagram
   SOURCE ||--o{ EVENT : provides
   SOURCE ||--o{ ASSIGNMENT : provides
   SOURCE ||--o{ STUDY_TASK : provides
+  SOURCE ||--o{ SEMESTER : provides
   COURSE ||--o{ EVENT : schedules
+  SEMESTER ||--o{ RECURRING_SCHEDULE_RULE : bounds
+  COURSE ||--o{ RECURRING_SCHEDULE_RULE : meets_as
+  RECURRING_SCHEDULE_RULE ||--o{ RECURRING_SCHEDULE_EXCEPTION : excepts
   COURSE ||--o{ ASSIGNMENT : groups
   COURSE ||--o{ STUDY_TASK : groups
   ASSIGNMENT ||--o{ STUDY_TASK : decomposes_into
@@ -40,8 +47,10 @@ At most one `running` or `paused` session can exist at once. The current-quest r
 
 If the process stops while a session is `running`, the next PIP initialization changes it and its task to `paused` without modifying `elapsed_seconds`. Time spent while the app was closed is not counted. The user explicitly resumes from the saved value.
 
-All timestamps are stored as UTC ISO 8601 strings. UI code converts them to the user's local timezone only when formatting for display. IDs are text UUIDs for user-created rows so records can later merge across external sources; deterministic `seed:*` IDs make development seed data idempotent.
+All timestamps are stored as UTC ISO 8601 strings. UI code converts them to the user's local timezone only when formatting for display. Recurring class times are the exception: a rule stores `HH:mm` wall-clock values and its Semester stores the IANA timezone needed to resolve each date to UTC. IDs are text UUIDs for user-created rows so records can later merge across external sources; deterministic `seed:*` IDs make development seed data idempotent.
 
 ## Source adapters
 
 Future iCal, e-Campus, or other adapters write through repositories and identify imported records with `(source_id, external_id)`. Partial unique indexes prevent duplicate imported courses, events, and assignments while allowing either field to remain null for manual data. Secrets, session cookies, private calendar URLs, and credentials must never be stored in seed data or committed files.
+
+The recurring schedule model and import contract are documented in [schedule-model.md](./schedule-model.md).

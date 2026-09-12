@@ -9,6 +9,7 @@
     "clean": "node scripts/clean-generated.mjs",
     "test:data": "node scripts/validate-data-foundation.mjs",
     "test:parser": "node scripts/validate-quick-add-parser.mjs",
+    "test:schedule": "node scripts/validate-schedule-foundation.mjs",
     "preview": "vite preview",
     "tauri": "tauri"
   },

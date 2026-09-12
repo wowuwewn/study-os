@@ -30,6 +30,9 @@ lerna-debug.log*
 *.sqlite-shm
 *.sqlite-wal
 *.sqlite3
+/local-schedule/
+/semester.local.json
+/semester.*.local.json
 
 # Editor directories and files
 .vscode/*
