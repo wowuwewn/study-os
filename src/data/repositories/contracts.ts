@@ -2,6 +2,7 @@ import type {
   Assignment,
   Course,
   FocusSession,
+  Source,
   StudyEvent,
   StudyTask,
   StudyTaskStatus,
@@ -14,6 +15,10 @@ export type CourseInput = Omit<Course, PersistedFields> & { id?: string };
 export type EventInput = Omit<StudyEvent, PersistedFields> & { id?: string };
 export type AssignmentInput = Omit<Assignment, PersistedFields> & { id?: string };
 export type StudyTaskInput = Omit<StudyTask, PersistedFields | "steps"> & { id?: string };
+
+export interface SourceRepository {
+  getOrCreateManual(): Promise<Source>;
+}
 
 export interface CourseRepository {
   list(): Promise<Course[]>;

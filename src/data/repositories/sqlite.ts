@@ -3,6 +3,7 @@ import type {
   Assignment,
   Course,
   FocusSession,
+  Source,
   StudyEvent,
   StudyTask,
   StudyTaskStatus,
@@ -20,12 +21,14 @@ import {
   mapCourse,
   mapEvent,
   mapFocusSession,
+  mapSource,
   mapStudyTask,
   mapTaskStep,
   type AssignmentRow,
   type CourseRow,
   type EventRow,
   type FocusSessionRow,
+  type SourceRow,
   type StudyTaskRow,
   type TaskStepRow,
 } from "../db/rows";
@@ -37,6 +40,7 @@ import type {
   EventInput,
   EventRepository,
   FocusSessionRepository,
+  SourceRepository,
   StudyTaskInput,
   StudyTaskRepository,
 } from "./contracts";
@@ -44,6 +48,29 @@ import type {
 async function first<T>(database: Database, query: string, values: unknown[] = []): Promise<T | null> {
   const rows = await database.select<T[]>(query, values);
   return rows[0] ?? null;
+}
+
+export class SqliteSourceRepository implements SourceRepository {
+  async getOrCreateManual(): Promise<Source> {
+    const database = await getDatabase();
+    const existing = await first<SourceRow>(
+      database,
+      "SELECT * FROM sources WHERE kind = 'manual' ORDER BY created_at LIMIT 1",
+    );
+    if (existing) return mapSource(existing);
+
+    const id = createEntityId();
+    const now = utcNow();
+    await database.execute(
+      `INSERT INTO sources
+        (id, kind, display_name, integration_metadata_json, created_at, updated_at)
+       VALUES (?1, 'manual', ?2, NULL, ?3, ?3)`,
+      [id, "직접 입력", now],
+    );
+    const saved = await first<SourceRow>(database, "SELECT * FROM sources WHERE id = ?1", [id]);
+    if (!saved) throw new Error("Manual source creation failed");
+    return mapSource(saved);
+  }
 }
 
 export class SqliteCourseRepository implements CourseRepository {

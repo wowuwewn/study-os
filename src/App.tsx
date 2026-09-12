@@ -2,6 +2,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import MainWindow from "./MainWindow";
 import PetWindow from "./PetWindow";
 import PipWindow from "./PipWindow";
+import QuickAddWindow from "./features/quick-add/QuickAddWindow";
 import "./App.css";
 
 function App() {
@@ -12,6 +13,7 @@ function App() {
 
   if (label === "main") return <MainWindow />;
   if (label === "pet") return <PetWindow />;
+  if (label === "quick-add") return <QuickAddWindow />;
   return <PipWindow />;
 }
 

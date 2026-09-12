@@ -4,6 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { StudyEvent, StudyTask, TaskStep } from "./domain/models";
 import { setTaskStepCompleted, FOCUS_COMMAND_EVENT } from "./data/studyData";
 import { useStudyDashboard } from "./data/useStudyDashboard";
+import { showQuickAddWindow } from "./features/quick-add/window";
 
 type MainIconName =
   | "add"
@@ -182,7 +183,7 @@ export default function MainWindow() {
           <button className="main-tool-button" type="button" aria-label="검색">
             <MainIcon name="search" />
           </button>
-          <button className="main-add-button" type="button">
+          <button className="main-add-button" type="button" onClick={() => void showQuickAddWindow()}>
             <MainIcon name="add" />
             <span>추가</span>
           </button>

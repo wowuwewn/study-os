@@ -3,9 +3,11 @@ import {
   SqliteCourseRepository,
   SqliteEventRepository,
   SqliteFocusSessionRepository,
+  SqliteSourceRepository,
   SqliteStudyTaskRepository,
 } from "./sqlite";
 
+export const sourceRepository = new SqliteSourceRepository();
 export const courseRepository = new SqliteCourseRepository();
 export const eventRepository = new SqliteEventRepository();
 export const assignmentRepository = new SqliteAssignmentRepository();
@@ -17,5 +19,6 @@ export type {
   CourseRepository,
   EventRepository,
   FocusSessionRepository,
+  SourceRepository,
   StudyTaskRepository,
 } from "./contracts";

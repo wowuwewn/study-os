@@ -51,6 +51,167 @@ button {
   cursor: pointer;
 }
 
+/* Quick Add v0.1 — Figma 44:387 */
+
+.quick-add-window {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid var(--pip-border);
+  border-radius: 14px;
+  background: #263646;
+  color: var(--pip-text);
+  font-family: var(--font-dodum);
+  user-select: none;
+}
+
+.quick-add-mark {
+  position: absolute;
+  top: 17px;
+  left: 17px;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 7px;
+  background: #31495a;
+  color: #f5f1e9;
+  font-family: var(--font-jua);
+  font-size: 14px;
+}
+
+.quick-add-form {
+  position: absolute;
+  top: 13px;
+  right: 23px;
+  left: 60px;
+  height: 47px;
+  overflow: hidden;
+  border: 1px solid rgba(67, 85, 101, 0.42);
+  border-radius: 10px;
+  background: #2e4050;
+}
+
+.quick-add-form input {
+  width: 100%;
+  height: 100%;
+  padding: 0 190px 0 19px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--pip-text);
+  font-size: 15px;
+  line-height: 1;
+  caret-color: var(--pip-mint);
+}
+
+.quick-add-form input::placeholder {
+  color: var(--pip-muted);
+  opacity: 1;
+}
+
+.quick-add-controls {
+  position: absolute;
+  top: 0;
+  right: 17px;
+  display: flex;
+  height: 100%;
+  align-items: center;
+  gap: 14px;
+  color: var(--pip-text);
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.quick-add-controls kbd {
+  display: grid;
+  width: 44px;
+  height: 30px;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: #354858;
+  color: #c9d2da;
+  font-family: var(--font-dodum);
+  font-size: 11px;
+}
+
+.quick-add-examples,
+.quick-add-preview {
+  position: absolute;
+  top: 72px;
+  right: 21px;
+  left: 21px;
+  display: flex;
+  height: 34px;
+  align-items: center;
+  gap: 10px;
+}
+
+.quick-add-example-label {
+  flex: 0 0 auto;
+  color: var(--main-blue);
+  font-size: 12px;
+}
+
+.quick-add-examples button {
+  height: 34px;
+  padding: 0 15px;
+  border: 1px solid var(--pip-border);
+  border-radius: 17px;
+  background: #2e4050;
+  color: #d8dfe5;
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.quick-add-examples button:hover,
+.quick-add-examples button:focus-visible {
+  border-color: #71889b;
+  outline: none;
+}
+
+.quick-add-preview {
+  gap: 12px;
+  padding: 0 13px;
+  border: 1px solid var(--pip-border);
+  border-radius: 9px;
+  background: #2e4050;
+  font-size: 12px;
+}
+
+.quick-add-preview-type {
+  color: var(--main-blue);
+  font-family: var(--font-jua);
+  font-size: 12px;
+}
+
+.quick-add-preview strong {
+  overflow: hidden;
+  color: var(--pip-text);
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quick-add-preview > span:last-child {
+  margin-left: auto;
+  color: var(--pip-muted);
+  white-space: nowrap;
+}
+
+.quick-add-preview--saved .quick-add-preview-type,
+.quick-add-preview--saved strong {
+  color: var(--pip-mint);
+}
+
+.quick-add-preview--error .quick-add-preview-type,
+.quick-add-preview--error > span:last-child {
+  color: #efb9a6;
+}
+
 .icon {
   fill: none;
   stroke: currentColor;

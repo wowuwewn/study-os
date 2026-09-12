@@ -1,4 +1,5 @@
-use tauri::{WebviewUrl, WebviewWindowBuilder};
+use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 use tauri_plugin_sql::{Migration, MigrationKind};
 
 #[cfg(target_os = "windows")]
@@ -8,6 +9,13 @@ use tauri::window::{Color, Effect, EffectsBuilder};
 use windows::Win32::UI::WindowsAndMessaging::{
     SetWindowPos, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOZORDER,
 };
+
+const QUICK_ADD_WINDOW_LABEL: &str = "quick-add";
+const QUICK_ADD_OPENED_EVENT: &str = "study-os-quick-add-opened";
+
+fn quick_add_shortcut() -> Shortcut {
+    Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::Space)
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -20,6 +28,23 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, shortcut, event| {
+                    if event.state() != ShortcutState::Pressed || *shortcut != quick_add_shortcut()
+                    {
+                        return;
+                    }
+                    if let Some(window) = app.get_webview_window(QUICK_ADD_WINDOW_LABEL) {
+                        let _ = window.unminimize();
+                        let _ = window.center();
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                        let _ = window.emit(QUICK_ADD_OPENED_EVENT, ());
+                    }
+                })
+                .build(),
+        )
         .plugin(
             tauri_plugin_sql::Builder::default()
                 .add_migrations("sqlite:study-os.db", migrations)
@@ -89,6 +114,25 @@ pub fn run() {
                 .shadow(true)
                 .center()
                 .build()?;
+
+            WebviewWindowBuilder::new(
+                app,
+                QUICK_ADD_WINDOW_LABEL,
+                WebviewUrl::App("index.html".into()),
+            )
+            .title("Study OS Quick Add")
+            .inner_size(810.0, 126.0)
+            .resizable(false)
+            .decorations(false)
+            .always_on_top(true)
+            .transparent(true)
+            .skip_taskbar(true)
+            .visible(false)
+            .shadow(true)
+            .center()
+            .build()?;
+
+            app.global_shortcut().register(quick_add_shortcut())?;
 
             Ok(())
         })
