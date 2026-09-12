@@ -10,6 +10,7 @@
     "test:data": "node scripts/validate-data-foundation.mjs",
     "test:parser": "node scripts/validate-quick-add-parser.mjs",
     "test:schedule": "node scripts/validate-schedule-foundation.mjs",
+    "qa:schedule-import": "node scripts/qa-semester-import-live.mjs semester.local.json",
     "preview": "vite preview",
     "tauri": "tauri"
   },

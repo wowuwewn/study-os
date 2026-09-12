@@ -6,8 +6,8 @@ This document is the handoff snapshot for continuing Study OS in a new Codex cha
 
 - Stack: Tauri 2, React 19, TypeScript, Vite, SQLite through `@tauri-apps/plugin-sql`.
 - Application identifier: `com.wowuwewn.studyos`.
-- Baseline commit at the time of this snapshot: `61c9436` (`학기 시간표 및 반복 일정 기반 구현`).
-- The working tree was clean before this document was created.
+- Baseline commit before the current uncommitted milestone: `d5eb185` (`Codex 자율 작업 및 검수 규칙 추가`).
+- The 2026-2 timetable milestone remains uncommitted by request.
 - Do not commit secrets or personal schedule URLs/data. Local databases and personal semester JSON files are ignored.
 
 ## Completed functionality
@@ -25,6 +25,12 @@ This document is the handoff snapshot for continuing Study OS in a new Codex cha
   - cancelled/moved/overridden per-date exceptions;
   - validated, idempotent semester JSON import;
   - Today merging of recurring classes and one-off/Quick Add Events in time order.
+- Actual 2026-2 timetable import:
+  - canonical values come from `docs/timetable.md`;
+  - Semester range is `2026-09-01` through `2026-12-14` in `Asia/Seoul`;
+  - the local app database contains exactly 7 imported Courses and 11 weekly RecurringScheduleRules;
+  - re-import preserves Semester, Course, and rule IDs without creating duplicate rows;
+  - recurring classes remain query-time occurrences and do not create Event rows.
 - The old fixed-date sample timeline Events are no longer seeded. Existing user/imported Events are not overwritten.
 
 ## Current window structure
@@ -128,12 +134,14 @@ cargo fmt --check
 - `test:data`: migrations, idempotent seed, repository-level task/focus lifecycle, restart recovery, and schedule schema constraints.
 - `test:parser`: deterministic Quick Add parser cases.
 - `test:schedule`: semester import, import idempotency, weekday and semester bounds, Event merge order, timezone boundary, invalid input, and exception behavior.
+- `test:schedule` also covers the canonical 2026-2 shape: 7 Courses, 11 weekly rules, seed Course reuse without metadata loss, existing Semester date preservation, idempotent re-import, and canonical Monday occurrences.
+- `npm run qa:schedule-import` reads ignored `semester.local.json`, invokes the existing import service inside a running Windows Tauri app through WebView2 CDP, imports twice, and verifies counts, stable IDs, zero Event materialization, current-day Today output, and canonical Monday occurrences.
 - `scripts/qa-quick-add-live.mjs` is an actual-app CDP QA helper, not an npm test script. It expects a running dev app with WebView2 remote debugging.
 - `npm run clean` removes only allowlisted, reproducible build/cache/temp outputs. It does not remove source, migrations, docs, assets, or local application data.
 
 ## Not implemented yet
 
-- The user's actual 2026-2 semester schedule has not been imported. Only the schema, sample JSON, validation, and programmatic import service exist.
+- There is still no schedule import Settings UI or file picker; the completed actual timetable import uses the ignored local file plus the development live-import helper.
 - No e-Campus login, scraping, assignment collection, iCal fetch, remote adapter, or credential storage exists.
 - No background synchronization, sync cursor, conflict resolution, deletion reconciliation, or cross-provider dedup workflow exists. Current `(source_id, external_id)` and natural-key protections cover import-level duplicates only.
 - Calendar UI is not implemented.
@@ -147,12 +155,11 @@ cargo fmt --check
 
 ## Next priorities
 
-1. Import the actual 2026-2 schedule through the local-only semester import path; do not commit the personal file.
-2. Add e-Campus/iCal integration without storing credentials or private URLs in Git.
-3. Add sync and dedup semantics beyond the current import-level unique keys.
-4. Implement Calendar using node `44:333` and `listScheduleOccurrencesBetween()`.
-5. Implement the Decision Engine against the existing Event/Assignment/StudyTask/ScheduleOccurrence separation.
-6. Implement Last Safe Start.
-7. Implement Week and Tasks surfaces; keep Notes out of scope unless separately prioritized.
-8. Perform Windows polish and release-oriented QA.
-9. Replace the Pet placeholder with the final Danwoong animation while preserving the existing state/event contract.
+1. Add e-Campus/iCal integration without storing credentials or private URLs in Git.
+2. Add sync and dedup semantics beyond the current import-level unique keys.
+3. Implement Calendar using node `44:333` and `listScheduleOccurrencesBetween()`.
+4. Implement the Decision Engine against the existing Event/Assignment/StudyTask/ScheduleOccurrence separation.
+5. Implement Last Safe Start.
+6. Implement Week and Tasks surfaces; keep Notes out of scope unless separately prioritized.
+7. Perform Windows polish and release-oriented QA.
+8. Replace the Pet placeholder with the final Danwoong animation while preserving the existing state/event contract.

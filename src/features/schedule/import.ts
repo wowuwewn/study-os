@@ -154,18 +154,16 @@ export async function importSemesterSchedule(
   const semesterMatch = existingSemesters.find((semester) =>
     document.semester.externalId
       ? semester.sourceId === source.id && semester.externalId === document.semester.externalId
-      : semester.name === document.semester.name
-        && semester.startsOn === document.semester.startsOn
-        && semester.endsOn === document.semester.endsOn
-        && semester.timezone === document.semester.timezone,
+      : semester.sourceId === source.id
+        && semester.name === document.semester.name,
   );
   const semester = await repositories.semesters.save({
     id: semesterMatch?.id,
     sourceId: source.id,
-    externalId: document.semester.externalId ?? null,
+    externalId: document.semester.externalId ?? semesterMatch?.externalId ?? null,
     name: document.semester.name,
-    startsOn: document.semester.startsOn,
-    endsOn: document.semester.endsOn,
+    startsOn: semesterMatch?.startsOn ?? document.semester.startsOn,
+    endsOn: semesterMatch?.endsOn ?? document.semester.endsOn,
     timezone: document.semester.timezone,
   });
 
@@ -177,17 +175,18 @@ export async function importSemesterSchedule(
     const courseMatch = knownCourses.find((course) =>
       courseValue.externalId
         ? course.sourceId === source.id && course.externalId === courseValue.externalId
-        : course.name.toLocaleLowerCase() === courseValue.name.toLocaleLowerCase()
-          && (course.code ?? "") === (courseValue.code ?? ""),
+        : course.sourceId === source.id
+          && course.name.toLocaleLowerCase() === courseValue.name.toLocaleLowerCase()
+          && (!courseValue.code || (course.code ?? "") === courseValue.code),
     );
     const course = await repositories.courses.save({
       id: courseMatch?.id,
       sourceId: source.id,
-      externalId: courseValue.externalId ?? null,
+      externalId: courseValue.externalId ?? courseMatch?.externalId ?? null,
       name: courseValue.name,
-      code: courseValue.code ?? null,
-      location: courseValue.location ?? null,
-      colorToken: courseValue.colorToken ?? null,
+      code: courseValue.code ?? courseMatch?.code ?? null,
+      location: courseValue.location ?? courseMatch?.location ?? null,
+      colorToken: courseValue.colorToken ?? courseMatch?.colorToken ?? null,
     });
     importedCourses.push(course);
     knownCourses = [...knownCourses.filter((known) => known.id !== course.id), course];
