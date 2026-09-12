@@ -1,5 +1,9 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { emitTo } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import type { StudyEvent, StudyTask, TaskStep } from "./domain/models";
+import { setTaskStepCompleted, FOCUS_COMMAND_EVENT } from "./data/studyData";
+import { useStudyDashboard } from "./data/useStudyDashboard";
 
 type MainIconName =
   | "add"
@@ -63,29 +67,79 @@ function MainIcon({ name }: { name: MainIconName }) {
   );
 }
 
-const TIMELINE_ITEMS = [
-  { time: "09:00 – 10:15", title: "자연어처리", place: "미래관 503호" },
-  { time: "12:30 – 13:45", title: "오픈소스AI응용", place: "e-Campus" },
-  { time: "15:00 – 16:15", title: "멀티미디어신호처리", place: "공학관 305호" },
-];
+const BASELINE_DUE_AT = Date.parse("2026-09-11T14:59:00.000Z");
 
-const TODAY_TASKS = [
-  { title: "자바IDE설치 및 프로젝트 생성", due: "오늘", tone: "today" },
-  { title: "멋사 J2-week02 과제", due: "D-5", tone: "deadline" },
-  { title: "고급데이터베이스 강의 예습", due: "30분", tone: "duration" },
-];
+function formatLocalTime(value: string) {
+  return new Intl.DateTimeFormat("ko-KR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(value));
+}
 
-const CHECKLIST = [
-  "조건문 개념 정리",
-  "반복문 개념 정리",
-  "예제 2-1 실습",
-  "간단한 문제 3개 풀기",
-];
+function formatEventTime(event: StudyEvent) {
+  const start = formatLocalTime(event.startAt);
+  return event.endAt ? `${start} – ${formatLocalTime(event.endAt)}` : start;
+}
+
+function getTaskDuePresentation(task: StudyTask) {
+  if (!task.dueAt && task.estimatedMinutes) {
+    return { due: `${task.estimatedMinutes}분`, tone: "duration" };
+  }
+  if (!task.dueAt) return { due: "", tone: "duration" };
+  const days = Math.max(0, Math.round((Date.parse(task.dueAt) - BASELINE_DUE_AT) / 86_400_000));
+  return days === 0
+    ? { due: "오늘", tone: "today" }
+    : { due: `D-${days}`, tone: "deadline" };
+}
+
+const LOADING_EVENTS = Array.from({ length: 3 }, (_, index) => ({
+  id: `loading-event-${index}`,
+  time: " ",
+  title: " ",
+  place: " ",
+}));
+
+const LOADING_TASKS = Array.from({ length: 3 }, (_, index) => ({
+  id: `loading-task-${index}`,
+  title: " ",
+  due: " ",
+  tone: "duration",
+}));
+
+const LOADING_STEPS = Array.from({ length: 4 }, (_, index) => ({
+  id: `loading-step-${index}`,
+  title: " ",
+  isCompleted: false,
+}));
 
 export default function MainWindow() {
-  const [checkedItems, setCheckedItems] = useState([true, true, false, false]);
-  const [isRunning, setIsRunning] = useState(false);
   const [memo, setMemo] = useState("");
+  const { dashboard, error } = useStudyDashboard();
+
+  useEffect(() => {
+    if (error) console.error("Study OS data load failed", error);
+  }, [error]);
+
+  const quest = dashboard?.currentQuest;
+  const timelineEvents = dashboard
+    ? dashboard.timelineEvents
+        .filter((event) => event.eventType !== "personal")
+        .slice(0, 3)
+        .map((event) => ({
+          id: event.id,
+          time: formatEventTime(event),
+          title: event.title,
+          place: event.location ?? "",
+        }))
+    : LOADING_EVENTS;
+  const nextEvent = dashboard?.timelineEvents.find((event) => event.eventType === "personal");
+  const todayTasks = dashboard
+    ? dashboard.todayTasks.map((task) => ({ id: task.id, title: task.title, ...getTaskDuePresentation(task) }))
+    : LOADING_TASKS;
+  const checklist: Array<Pick<TaskStep, "id" | "title" | "isCompleted">> =
+    quest?.steps ?? LOADING_STEPS;
+  const isRunning = dashboard?.activeFocusSession?.status === "running";
 
   const minimizeWindow = () => getCurrentWindow().minimize().catch(console.error);
   const toggleMaximize = () =>
@@ -146,8 +200,8 @@ export default function MainWindow() {
           </header>
 
           <ol className="timeline" aria-label="오늘의 일정">
-            {TIMELINE_ITEMS.map((item, index) => (
-              <li className={`timeline-item timeline-item--${index + 1}`} key={item.time}>
+            {timelineEvents.map((item, index) => (
+              <li className={`timeline-item timeline-item--${index + 1}`} key={item.id}>
                 <span className="timeline-dot" aria-hidden="true" />
                 <time>{item.time}</time>
                 <strong>{item.title}</strong>
@@ -165,29 +219,29 @@ export default function MainWindow() {
               <button type="button">
                 <span className="quest-radio" aria-hidden="true" />
                 <span className="timeline-current-copy">
-                  <strong>Java 기초 복습</strong>
-                  <small>조건문, 반복문 정리</small>
+                  <strong>{quest?.title ?? " "}</strong>
+                  <small>{quest?.notes ?? " "}</small>
                 </span>
-                <span className="timeline-current-duration">45분</span>
+                <span className="timeline-current-duration">{quest?.estimatedMinutes ? `${quest.estimatedMinutes}분` : " "}</span>
                 <MainIcon name="chevron" />
               </button>
             </li>
 
             <li className="timeline-item timeline-item--last">
               <span className="timeline-dot" aria-hidden="true" />
-              <time>18:30</time>
-              <strong>개인 일정</strong>
+              <time>{nextEvent ? formatLocalTime(nextEvent.startAt) : " "}</time>
+              <strong>{nextEvent?.title ?? " "}</strong>
             </li>
           </ol>
 
           <section className="today-tasks" aria-labelledby="tasks-heading">
             <header>
               <h2 id="tasks-heading">할 일</h2>
-              <span>3</span>
+              <span>{todayTasks.length}</span>
             </header>
             <ul>
-              {TODAY_TASKS.map((task) => (
-                <li key={task.title}>
+              {todayTasks.map((task) => (
+                <li key={task.id}>
                   <button className="task-check" type="button" aria-label={`${task.title} 완료`} />
                   <span>{task.title}</span>
                   <small className={`task-due task-due--${task.tone}`}>{task.due}</small>
@@ -202,13 +256,13 @@ export default function MainWindow() {
         <div className="detail-pane">
           <aside className="quest-detail" aria-labelledby="quest-detail-heading">
             <div className="quest-category">공부</div>
-            <h2 id="quest-detail-heading">Java 기초 복습</h2>
-            <p className="quest-detail-subtitle">조건문, 반복문 정리</p>
+            <h2 id="quest-detail-heading">{quest?.title ?? " "}</h2>
+            <p className="quest-detail-subtitle">{quest?.notes ?? " "}</p>
 
             <dl className="quest-metadata">
               <div>
                 <dt><MainIcon name="clock" /><span className="sr-only">예상 시간</span></dt>
-                <dd>예상 45분</dd>
+                <dd>{quest?.estimatedMinutes ? `예상 ${quest.estimatedMinutes}분` : "예상 시간 미정"}</dd>
               </div>
               <div>
                 <dt><MainIcon name="book" /><span className="sr-only">학습 유형</span></dt>
@@ -223,26 +277,21 @@ export default function MainWindow() {
             <section className="detail-checklist" aria-labelledby="checklist-heading">
               <header>
                 <h3 id="checklist-heading">체크리스트</h3>
-                <span>{checkedItems.filter(Boolean).length} / {CHECKLIST.length}</span>
+                <span>{checklist.filter((item) => item.isCompleted).length} / {checklist.length}</span>
               </header>
               <div className="detail-checklist-items">
-                {CHECKLIST.map((item, index) => (
-                  <label key={item}>
+                {checklist.map((item) => (
+                  <label key={item.id}>
                     <input
                       type="checkbox"
-                      checked={checkedItems[index]}
-                      onChange={() =>
-                        setCheckedItems((current) =>
-                          current.map((checked, itemIndex) =>
-                            itemIndex === index ? !checked : checked,
-                          ),
-                        )
-                      }
+                      checked={item.isCompleted}
+                      disabled={!dashboard}
+                      onChange={() => void setTaskStepCompleted(item.id, !item.isCompleted)}
                     />
                     <span className="detail-checkbox" aria-hidden="true">
                       <MainIcon name="check" />
                     </span>
-                    <span>{item}</span>
+                    <span>{item.title}</span>
                   </label>
                 ))}
               </div>
@@ -251,7 +300,8 @@ export default function MainWindow() {
             <button
               className="detail-start-button"
               type="button"
-              onClick={() => setIsRunning((running) => !running)}
+              onClick={() => void emitTo("pip", FOCUS_COMMAND_EVENT, { action: "toggle" })}
+              disabled={!dashboard}
             >
               <MainIcon name="play" />
               <span>{isRunning ? "일시정지" : "시작하기"}</span>
@@ -269,6 +319,7 @@ export default function MainWindow() {
           </aside>
         </div>
       </div>
+      {error && <p className="sr-only" role="alert">로컬 데이터를 불러오지 못했습니다.</p>}
     </main>
   );
 }

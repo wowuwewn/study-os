@@ -15,3 +15,7 @@
 - Never add private e-Campus URLs, tokens, passwords, or personal credentials.
 - Visual work requires QA in the actual Windows Tauri application.
 - Do not unnecessarily rewrite working behavior for a visual-only change.
+- Keep `Event`, `Assignment`, `StudyTask`, and `FocusSession` as separate domain concepts.
+- UI components must use repository/service APIs and must not embed SQLite queries.
+- Persist timestamps as UTC ISO 8601 strings and convert them to local time only at the UI boundary.
+- Database schema changes require numbered migrations under `src-tauri/migrations/`.

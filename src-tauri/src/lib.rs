@@ -1,4 +1,5 @@
 use tauri::{WebviewUrl, WebviewWindowBuilder};
+use tauri_plugin_sql::{Migration, MigrationKind};
 
 #[cfg(target_os = "windows")]
 use tauri::window::{Color, Effect, EffectsBuilder};
@@ -10,8 +11,20 @@ use windows::Win32::UI::WindowsAndMessaging::{
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let migrations = vec![Migration {
+        version: 1,
+        description: "initial_study_os_schema",
+        sql: include_str!("../migrations/001_initial.sql"),
+        kind: MigrationKind::Up,
+    }];
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(
+            tauri_plugin_sql::Builder::default()
+                .add_migrations("sqlite:study-os.db", migrations)
+                .build(),
+        )
         .setup(|app| {
             let pip_builder =
                 WebviewWindowBuilder::new(app, "pip", WebviewUrl::App("index.html".into()))

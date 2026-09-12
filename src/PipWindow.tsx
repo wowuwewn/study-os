@@ -22,24 +22,20 @@ import {
   type PetSnapshot,
   type SessionState,
 } from "./pipState";
+import type { FocusSession } from "./domain/models";
+import { focusSessionRepository, studyTaskRepository } from "./data/repositories";
+import {
+  FOCUS_COMMAND_EVENT,
+  notifyStudyDataChanged,
+  setTaskStepCompleted,
+  type FocusCommand,
+} from "./data/studyData";
+import { useStudyDashboard } from "./data/useStudyDashboard";
 
 type PipMode = "compact" | "expanded";
 
-type Quest = {
-  id: string;
-  title: string;
-  durationMinutes: number;
-  topic: string;
-};
-
 const PIP_WIDTH = 312;
 const PIP_HEIGHT = { compact: 116, expanded: 194 } as const;
-const INITIAL_ELAPSED_SECONDS = 32 * 60 + 14;
-
-const QUESTS: Quest[] = [
-  { id: "java-basics", title: "Java 기초 복습", durationMinutes: 45, topic: "조건문, 반복문 정리" },
-  { id: "algorithm-practice", title: "알고리즘 문제 풀이", durationMinutes: 30, topic: "배열, 문자열 문제 풀이" },
-];
 
 function PipIcon({ name }: { name: "close" | "pause" | "play" }) {
   return (
@@ -72,6 +68,14 @@ function formatElapsed(totalSeconds: number) {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
+function formatLocalTime(isoDateTime: string) {
+  return new Intl.DateTimeFormat("ko-KR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(isoDateTime));
+}
+
 async function clampPipToWorkArea() {
   const currentWindow = getCurrentWindow();
   const [position, size, monitor] = await Promise.all([
@@ -96,29 +100,56 @@ async function clampPipToWorkArea() {
 
 export default function PipWindow() {
   const [pipMode, setPipMode] = useState<PipMode>("compact");
-  const [questIndex, setQuestIndex] = useState(0);
-  const [sessionState, setSessionState] = useState<SessionState>("running");
-  const [elapsedSeconds, setElapsedSeconds] = useState(INITIAL_ELAPSED_SECONDS);
-  const [checkedItems, setCheckedItems] = useState([true, false]);
+  const [sessionState, setSessionState] = useState<SessionState>("idle");
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [focusSession, setFocusSession] = useState<FocusSession | null>(null);
+  const [isFocusMutationPending, setIsFocusMutationPending] = useState(false);
+  const { dashboard, error, reload } = useStudyDashboard({ recoverRunningSessions: true });
   const lastTickAt = useRef(Date.now());
+  const elapsedSecondsRef = useRef(0);
   const completionTimer = useRef<number | undefined>(undefined);
-  const snapshotRef = useRef<PetSnapshot>({ state: "running", progress: 0 });
+  const snapshotRef = useRef<PetSnapshot>({ state: "idle", progress: 0 });
+  const recoveryAnnouncedRef = useRef(false);
+  const toggleSessionRef = useRef<() => Promise<void>>(async () => undefined);
+  const completeQuestRef = useRef<() => Promise<void>>(async () => undefined);
 
-  const currentQuest = QUESTS[questIndex];
-  const totalSeconds = currentQuest.durationMinutes * 60;
+  const currentQuest = dashboard?.currentQuest;
+  const totalSeconds = (currentQuest?.estimatedMinutes ?? 45) * 60;
   const progress = Math.min(100, (elapsedSeconds / totalSeconds) * 100);
   const formattedProgress = formatElapsed(elapsedSeconds);
+  const nextEvent = dashboard?.timelineEvents.find((event) => event.eventType === "personal");
+  const visibleSteps = currentQuest?.steps.slice(0, 2) ?? [];
+
+  elapsedSecondsRef.current = elapsedSeconds;
+
+  useEffect(() => {
+    if (!dashboard || sessionState === "completing") return;
+    const active = dashboard.activeFocusSession;
+    setFocusSession(active);
+    setElapsedSeconds(active?.elapsedSeconds ?? 0);
+    elapsedSecondsRef.current = active?.elapsedSeconds ?? 0;
+    setSessionState(active?.status === "running" ? "running" : active?.status === "paused" ? "paused" : "idle");
+
+    if (!recoveryAnnouncedRef.current) {
+      recoveryAnnouncedRef.current = true;
+      void notifyStudyDataChanged();
+    }
+  }, [dashboard]);
+
+  useEffect(() => {
+    if (error) console.error("Study OS PIP data load failed", error);
+  }, [error]);
 
   const syncElapsedTime = useCallback(() => {
     const now = Date.now();
     const secondsPassed = Math.floor((now - lastTickAt.current) / 1000);
-    if (secondsPassed < 1) return;
+    if (secondsPassed < 1) return elapsedSecondsRef.current;
     lastTickAt.current += secondsPassed * 1000;
-    setElapsedSeconds((seconds) => {
-      const next = Math.min(totalSeconds, seconds + secondsPassed);
-      if (next >= totalSeconds) setSessionState("paused");
-      return next;
-    });
+    const next = Math.min(totalSeconds, elapsedSecondsRef.current + secondsPassed);
+    elapsedSecondsRef.current = next;
+    setElapsedSeconds(next);
+    if (next >= totalSeconds) setSessionState("paused");
+    return next;
   }, [totalSeconds]);
 
   useEffect(() => {
@@ -130,6 +161,15 @@ export default function PipWindow() {
       window.clearInterval(timer);
     };
   }, [sessionState, syncElapsedTime]);
+
+  useEffect(() => {
+    if (sessionState !== "running" || !focusSession) return;
+    const saveTimer = window.setInterval(() => {
+      syncElapsedTime();
+      void focusSessionRepository.saveElapsed(focusSession.id, elapsedSecondsRef.current);
+    }, 5_000);
+    return () => window.clearInterval(saveTimer);
+  }, [focusSession, sessionState, syncElapsedTime]);
 
   const petSnapshot = useMemo<PetSnapshot>(
     () => ({ state: toPetState(sessionState), progress }),
@@ -207,21 +247,100 @@ export default function PipWindow() {
     await currentWindow.hide();
   };
 
-  const toggleSession = () => {
-    setSessionState((state) => (state === "running" ? "paused" : "running"));
-  };
+  const toggleSession = useCallback(async () => {
+    if (!currentQuest || isFocusMutationPending || sessionState === "completing") return;
+    setIsFocusMutationPending(true);
+    try {
+      if (sessionState === "running" && focusSession) {
+        const elapsed = syncElapsedTime();
+        const paused = await focusSessionRepository.pause(
+          focusSession.id,
+          focusSession.taskId,
+          elapsed,
+        );
+        setFocusSession(paused);
+        setSessionState("paused");
+      } else {
+        const running = focusSession?.status === "paused"
+          ? await focusSessionRepository.resume(focusSession.id, focusSession.taskId)
+          : await focusSessionRepository.startOrResume(currentQuest, elapsedSecondsRef.current);
+        setFocusSession(running);
+        lastTickAt.current = Date.now();
+        setSessionState("running");
+      }
+      await notifyStudyDataChanged();
+    } catch (reason) {
+      console.error("Focus session toggle failed", reason);
+    } finally {
+      setIsFocusMutationPending(false);
+    }
+  }, [currentQuest, focusSession, isFocusMutationPending, sessionState, syncElapsedTime]);
 
-  const completeQuest = () => {
-    if (sessionState === "completing") return;
+  const completeQuest = useCallback(async () => {
+    if (!currentQuest || isFocusMutationPending || sessionState === "completing") return;
+    setIsFocusMutationPending(true);
     setSessionState("completing");
+    elapsedSecondsRef.current = totalSeconds;
     setElapsedSeconds(totalSeconds);
-    completionTimer.current = window.setTimeout(() => {
-      setQuestIndex((index) => (index + 1) % QUESTS.length);
-      setElapsedSeconds(0);
-      setCheckedItems([false, false]);
-      setSessionState("idle");
-    }, 500);
-  };
+    try {
+      if (focusSession) {
+        await focusSessionRepository.complete(focusSession.id, focusSession.taskId, totalSeconds);
+      } else {
+        await studyTaskRepository.setStatus(currentQuest.id, "done");
+      }
+      await notifyStudyDataChanged();
+      completionTimer.current = window.setTimeout(() => {
+        setFocusSession(null);
+        elapsedSecondsRef.current = 0;
+        setElapsedSeconds(0);
+        setSessionState("idle");
+        setIsFocusMutationPending(false);
+        void reload();
+      }, 500);
+    } catch (reason) {
+      console.error("Focus session completion failed", reason);
+      setSessionState(focusSession?.status === "running" ? "running" : focusSession ? "paused" : "idle");
+      setIsFocusMutationPending(false);
+    }
+  }, [currentQuest, focusSession, isFocusMutationPending, reload, sessionState, totalSeconds]);
+
+  toggleSessionRef.current = toggleSession;
+  completeQuestRef.current = completeQuest;
+
+  useEffect(() => {
+    if (
+      sessionState !== "paused" ||
+      focusSession?.status !== "running" ||
+      elapsedSeconds < totalSeconds ||
+      isFocusMutationPending
+    ) return;
+
+    setIsFocusMutationPending(true);
+    void focusSessionRepository
+      .pause(focusSession.id, focusSession.taskId, elapsedSeconds)
+      .then((paused) => {
+        setFocusSession(paused);
+        return notifyStudyDataChanged();
+      })
+      .catch((reason) => console.error("Automatic focus pause failed", reason))
+      .finally(() => setIsFocusMutationPending(false));
+  }, [elapsedSeconds, focusSession, isFocusMutationPending, sessionState, totalSeconds]);
+
+  useEffect(() => {
+    let cleanup: (() => void) | undefined;
+    let cancelled = false;
+    void listen<FocusCommand>(FOCUS_COMMAND_EVENT, (event) => {
+      if (event.payload.action === "complete") void completeQuestRef.current();
+      else void toggleSessionRef.current();
+    }).then((unlisten) => {
+      if (cancelled) unlisten();
+      else cleanup = unlisten;
+    });
+    return () => {
+      cancelled = true;
+      cleanup?.();
+    };
+  }, []);
 
   const handlePipClick = (event: MouseEvent<HTMLElement>) => {
     if ((event.target as HTMLElement).closest("button, label, input")) return;
@@ -257,38 +376,45 @@ export default function PipWindow() {
         </button>
       </div>
 
-      <h1 className="pip-v02__quest-title">{currentQuest.title}</h1>
-      <p className="pip-v02__elapsed">{formattedProgress} / {currentQuest.durationMinutes}</p>
-      {pipMode === "expanded" && <p className="pip-v02__topic">{currentQuest.topic}</p>}
+      <h1 className="pip-v02__quest-title">{currentQuest?.title ?? " "}</h1>
+      <p className="pip-v02__elapsed">{formattedProgress} / {currentQuest?.estimatedMinutes ?? 45}</p>
+      {pipMode === "expanded" && <p className="pip-v02__topic">{currentQuest?.notes ?? " "}</p>}
 
       <div className="pip-v02__progress" aria-label={`${Math.round(progress)}% 진행`}>
         <span className="pip-v02__progress-fill" style={{ width: `${progress}%` }} />
         <Runner progress={progress} state={sessionState} />
       </div>
 
-      <button className="pip-v02__session" type="button" onClick={toggleSession} aria-label={sessionState === "running" ? "일시정지" : "시작"}>
+      <button
+        className="pip-v02__session"
+        type="button"
+        onClick={() => void toggleSession()}
+        aria-label={sessionState === "running" ? "일시정지" : "시작"}
+        disabled={!currentQuest || isFocusMutationPending}
+      >
         <PipIcon name={sessionState === "running" ? "pause" : "play"} />
       </button>
 
       {pipMode === "expanded" && (
         <section className="pip-v02__checklist" aria-label="퀘스트 체크리스트">
-          {["조건문 개념 정리", "반복문 개념 정리"].map((item, index) => (
-            <label key={item}>
+          {visibleSteps.map((step) => (
+            <label key={step.id}>
               <input
                 type="checkbox"
-                checked={checkedItems[index]}
-                onChange={() => setCheckedItems((items) => items.map((checked, itemIndex) => itemIndex === index ? !checked : checked))}
+                checked={step.isCompleted}
+                onChange={() => void setTaskStepCompleted(step.id, !step.isCompleted)}
               />
               <span className="pip-v02__checkbox" aria-hidden="true" />
-              <span>{item}</span>
+              <span>{step.title}</span>
             </label>
           ))}
         </section>
       )}
 
-      <p className="pip-v02__next"><span>다음</span><time dateTime="18:30">18:30</time><span aria-hidden="true">·</span><span>개인 일정</span></p>
+      <p className="pip-v02__next"><span>다음</span><time dateTime={nextEvent?.startAt}>{nextEvent ? formatLocalTime(nextEvent.startAt) : " "}</time><span aria-hidden="true">·</span><span>{nextEvent?.title ?? " "}</span></p>
 
-      <button className="sr-only" type="button" onClick={completeQuest}>현재 퀘스트 완료</button>
+      <button className="sr-only" type="button" onClick={() => void completeQuest()}>현재 퀘스트 완료</button>
+      {error && <p className="sr-only" role="alert">로컬 데이터를 불러오지 못했습니다.</p>}
     </main>
   );
 }
