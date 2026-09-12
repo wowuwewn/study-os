@@ -36,15 +36,11 @@ const INITIAL_QUESTS: Quest[] = [
     title: "운영체제 노트 정리",
     durationMinutes: 25,
     topic: "프로세스, 스레드 노트",
-    checklist: ["강의 노트 복기", "핵심 문장 5개"],
+    checklist: ["강의 노트 보기", "핵심 문장 5개"],
   },
 ];
 
-function PipIcon({
-  name,
-}: {
-  name: "check" | "close" | "open" | "pause" | "play";
-}) {
+function PipIcon({ name }: { name: "check" | "close" | "open" | "pause" | "play" }) {
   const paths = {
     check: <path d="m3.5 8 2.8 2.8 6.2-6.3" />,
     close: <path d="m4.5 4.5 7 7m0-7-7 7" />,
@@ -71,23 +67,11 @@ function PipIcon({
   );
 }
 
-function BrandMark() {
-  return (
-    <span className="brand-mark" aria-hidden="true">
-      <i />
-    </span>
-  );
-}
-
 function Runner({ progress, state }: RunnerProps) {
   const position = Math.min(98, Math.max(2, progress));
 
   return (
-    <span
-      className="runner-position"
-      style={{ left: `${position}%` }}
-      aria-hidden="true"
-    >
+    <span className="runner-position" style={{ left: `${position}%` }} aria-hidden="true">
       <span className={`runner-marker runner-marker--${state}`} />
     </span>
   );
@@ -101,8 +85,8 @@ function formatDuration(totalSeconds: number) {
 
 export default function PipWindow() {
   const [quests, setQuests] = useState(INITIAL_QUESTS);
-  const [sessionState, setSessionState] = useState<SessionState>("idle");
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [sessionState, setSessionState] = useState<SessionState>("running");
+  const [elapsedSeconds, setElapsedSeconds] = useState(32 * 60 + 14);
   const [isCompleting, setIsCompleting] = useState(false);
   const [announcement, setAnnouncement] = useState("");
   const completionTimer = useRef<number | undefined>(undefined);
@@ -120,7 +104,7 @@ export default function PipWindow() {
     [],
   );
   const statusLabel = useMemo(() => {
-    if (sessionState === "running") return "집중";
+    if (sessionState === "running") return "지금";
     if (sessionState === "paused") return "멈춤";
     if (sessionState === "completing") return "완료";
     return "지금";
@@ -189,7 +173,7 @@ export default function PipWindow() {
     <main className="study-pip" onClick={handlePipClick}>
       <header className="pip-titlebar" data-tauri-drag-region>
         <div className="brand brand--pip" data-tauri-drag-region>
-          <BrandMark />
+          <span className="brand-mark" aria-hidden="true" />
           <span>Study OS</span>
         </div>
         <div className="pip-window-actions">
@@ -237,40 +221,30 @@ export default function PipWindow() {
         </div>
 
         <div className="progress-block">
-          <div className="progress-row">
-            <div className="track" aria-label={`${Math.round(progress)}% 진행`}>
-              <span className="track-fill" style={{ width: `${progress}%` }} />
-              <Runner progress={progress} state={sessionState} />
-            </div>
-            <div className="quest-controls">
-              <button
-                className="control-button control-button--complete"
-                type="button"
-                aria-label="퀘스트 완료"
-                title="퀘스트 완료"
-                onClick={completeQuest}
-                disabled={isCompleting}
-              >
-                <PipIcon name="check" />
-              </button>
-              <button
-                className="control-button control-button--session"
-                type="button"
-                aria-label={sessionState === "running" ? "일시정지" : "시작"}
-                title={sessionState === "running" ? "일시정지" : "시작"}
-                onClick={toggleSession}
-                disabled={isCompleting}
-              >
-                <PipIcon name={sessionState === "running" ? "pause" : "play"} />
-              </button>
-            </div>
+          <div className="track" aria-label={`${Math.round(progress)}% 진행`}>
+            <span className="track-fill" style={{ width: `${progress}%` }} />
+            <Runner progress={progress} state={sessionState} />
           </div>
+          <button
+            className="control-button control-button--session"
+            type="button"
+            aria-label={sessionState === "running" ? "일시정지" : "시작"}
+            title={sessionState === "running" ? "일시정지" : "시작"}
+            onClick={toggleSession}
+            disabled={isCompleting}
+          >
+            <PipIcon name={sessionState === "running" ? "pause" : "play"} />
+          </button>
           <div className="elapsed-time">
             <span>{formatDuration(elapsedSeconds)}</span>
             <span aria-hidden="true">/</span>
             <span>{formatDuration(totalSeconds)}</span>
           </div>
         </div>
+
+        <button className="sr-only" type="button" onClick={completeQuest}>
+          현재 퀘스트 완료
+        </button>
       </section>
 
       <footer className="next-event">
@@ -279,9 +253,7 @@ export default function PipWindow() {
         <span>개인 일정</span>
       </footer>
 
-      <p className="sr-only" aria-live="polite">
-        {announcement}
-      </p>
+      <p className="sr-only" aria-live="polite">{announcement}</p>
     </main>
   );
 }

@@ -11,6 +11,7 @@ type MainIconName =
   | "document"
   | "maximize"
   | "minimize"
+  | "play"
   | "search"
   | "settings";
 
@@ -40,6 +41,7 @@ function MainIcon({ name }: { name: MainIconName }) {
     ),
     maximize: <rect x="4" y="4" width="8" height="8" rx=".5" />,
     minimize: <path d="M4 8h8" />,
+    play: <path d="m6 4.5 6 3.5-6 3.5Z" />,
     search: (
       <>
         <circle cx="7" cy="7" r="4.5" />
@@ -61,14 +63,6 @@ function MainIcon({ name }: { name: MainIconName }) {
   );
 }
 
-function MainBrandMark() {
-  return (
-    <span className="main-brand-mark" aria-hidden="true">
-      <i />
-    </span>
-  );
-}
-
 const TIMELINE_ITEMS = [
   { time: "09:00 – 10:15", title: "자연어처리", place: "미래관 503호" },
   { time: "12:30 – 13:45", title: "오픈소스AI응용", place: "e-Campus" },
@@ -76,16 +70,16 @@ const TIMELINE_ITEMS = [
 ];
 
 const TODAY_TASKS = [
-  { title: "자바 IDE 설치 및 프로젝트 생성", due: "오늘", tone: "peach" },
-  { title: "알고리즘 문제 3개", due: "내일", tone: "blue" },
-  { title: "강의 노트 정리", due: "9/13", tone: "sage" },
+  { title: "자바IDE설치 및 프로젝트 생성", due: "오늘", tone: "today" },
+  { title: "멋사 J2-week02 과제", due: "D-5", tone: "deadline" },
+  { title: "고급데이터베이스 강의 예습", due: "30분", tone: "duration" },
 ];
 
 const CHECKLIST = [
   "조건문 개념 정리",
   "반복문 개념 정리",
   "예제 2-1 실습",
-  "문제 3개",
+  "간단한 문제 3개 풀기",
 ];
 
 export default function MainWindow() {
@@ -102,7 +96,7 @@ export default function MainWindow() {
     <main className="main-window">
       <header className="main-titlebar" data-tauri-drag-region>
         <div className="main-brand" data-tauri-drag-region>
-          <MainBrandMark />
+          <span className="main-brand-mark" aria-hidden="true" />
           <span>Study OS</span>
         </div>
         <div className="main-window-actions">
@@ -152,12 +146,12 @@ export default function MainWindow() {
           </header>
 
           <ol className="timeline" aria-label="오늘의 일정">
-            {TIMELINE_ITEMS.map((item) => (
-              <li className="timeline-item" key={item.time}>
+            {TIMELINE_ITEMS.map((item, index) => (
+              <li className={`timeline-item timeline-item--${index + 1}`} key={item.time}>
                 <span className="timeline-dot" aria-hidden="true" />
                 <time>{item.time}</time>
                 <strong>{item.title}</strong>
-                <span>{item.place}</span>
+                <span className="timeline-place">{item.place}</span>
               </li>
             ))}
 
@@ -188,7 +182,7 @@ export default function MainWindow() {
 
           <section className="today-tasks" aria-labelledby="tasks-heading">
             <header>
-              <h2 id="tasks-heading">오늘 할 일</h2>
+              <h2 id="tasks-heading">할 일</h2>
               <span>3</span>
             </header>
             <ul>
@@ -201,73 +195,79 @@ export default function MainWindow() {
               ))}
             </ul>
           </section>
+
+          <footer className="today-footer">지금 하는 게, 나중의 나를 만든다.</footer>
         </section>
 
-        <aside className="quest-detail" aria-labelledby="quest-detail-heading">
-          <div className="quest-category">공부</div>
-          <h2 id="quest-detail-heading">Java 기초 복습</h2>
-          <p className="quest-detail-subtitle">조건문, 반복문 정리</p>
+        <div className="detail-pane">
+          <aside className="quest-detail" aria-labelledby="quest-detail-heading">
+            <div className="quest-category">공부</div>
+            <h2 id="quest-detail-heading">Java 기초 복습</h2>
+            <p className="quest-detail-subtitle">조건문, 반복문 정리</p>
 
-          <dl className="quest-metadata">
-            <div>
-              <dt><MainIcon name="clock" /><span className="sr-only">예상 시간</span></dt>
-              <dd>예상 45분</dd>
-            </div>
-            <div>
-              <dt><MainIcon name="book" /><span className="sr-only">학습 유형</span></dt>
-              <dd>개인학습</dd>
-            </div>
-            <div>
-              <dt><MainIcon name="document" /><span className="sr-only">자료</span></dt>
-              <dd>강의자료 2-1</dd>
-            </div>
-          </dl>
+            <dl className="quest-metadata">
+              <div>
+                <dt><MainIcon name="clock" /><span className="sr-only">예상 시간</span></dt>
+                <dd>예상 45분</dd>
+              </div>
+              <div>
+                <dt><MainIcon name="book" /><span className="sr-only">학습 유형</span></dt>
+                <dd>개인학습</dd>
+              </div>
+              <div>
+                <dt><MainIcon name="document" /><span className="sr-only">자료</span></dt>
+                <dd>강의자료 2-1</dd>
+              </div>
+            </dl>
 
-          <section className="detail-checklist" aria-labelledby="checklist-heading">
-            <header>
-              <h3 id="checklist-heading">체크리스트</h3>
-              <span>{checkedItems.filter(Boolean).length} / {CHECKLIST.length}</span>
-            </header>
-            <div className="detail-checklist-items">
-              {CHECKLIST.map((item, index) => (
-                <label key={item}>
-                  <input
-                    type="checkbox"
-                    checked={checkedItems[index]}
-                    onChange={() =>
-                      setCheckedItems((current) =>
-                        current.map((checked, itemIndex) =>
-                          itemIndex === index ? !checked : checked,
-                        ),
-                      )
-                    }
-                  />
-                  <span className="detail-checkbox" aria-hidden="true">
-                    <MainIcon name="check" />
-                  </span>
-                  <span>{item}</span>
-                </label>
-              ))}
-            </div>
-          </section>
+            <section className="detail-checklist" aria-labelledby="checklist-heading">
+              <header>
+                <h3 id="checklist-heading">체크리스트</h3>
+                <span>{checkedItems.filter(Boolean).length} / {CHECKLIST.length}</span>
+              </header>
+              <div className="detail-checklist-items">
+                {CHECKLIST.map((item, index) => (
+                  <label key={item}>
+                    <input
+                      type="checkbox"
+                      checked={checkedItems[index]}
+                      onChange={() =>
+                        setCheckedItems((current) =>
+                          current.map((checked, itemIndex) =>
+                            itemIndex === index ? !checked : checked,
+                          ),
+                        )
+                      }
+                    />
+                    <span className="detail-checkbox" aria-hidden="true">
+                      <MainIcon name="check" />
+                    </span>
+                    <span>{item}</span>
+                  </label>
+                ))}
+              </div>
+            </section>
 
-          <button
-            className="detail-start-button"
-            type="button"
-            onClick={() => setIsRunning((running) => !running)}
-          >
-            {isRunning ? "일시정지" : "시작하기"}
-          </button>
+            <button
+              className="detail-start-button"
+              type="button"
+              onClick={() => setIsRunning((running) => !running)}
+            >
+              <MainIcon name="play" />
+              <span>{isRunning ? "일시정지" : "시작하기"}</span>
+              <span aria-hidden="true">⌄</span>
+            </button>
 
-          <label className="memo-field">
-            <span>메모</span>
-            <textarea
-              value={memo}
-              onChange={(event) => setMemo(event.currentTarget.value)}
-              placeholder="공부하면서 남길 내용을 적어두세요."
-            />
-          </label>
-        </aside>
+            <label className="memo-field">
+              <span>ↄ&nbsp;&nbsp;메모</span>
+              <textarea
+                value={memo}
+                onChange={(event) => setMemo(event.currentTarget.value)}
+                placeholder="여기에 간단한 메모를..."
+              />
+            </label>
+          </aside>
+        </div>
       </div>
     </main>
   );

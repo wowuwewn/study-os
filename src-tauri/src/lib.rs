@@ -14,9 +14,9 @@ pub fn run() {
                 WebviewUrl::App("index.html".into()),
             )
             .title("Study OS Quest")
-            .inner_size(292.0, 258.0)
-            .min_inner_size(292.0, 258.0)
-            .max_inner_size(292.0, 258.0)
+            .inner_size(282.0, 270.0)
+            .min_inner_size(282.0, 270.0)
+            .max_inner_size(282.0, 270.0)
             .resizable(false)
             .decorations(false)
             .always_on_top(true)
@@ -28,7 +28,7 @@ pub fn run() {
             let pip_builder = pip_builder.effects(
                 EffectsBuilder::new()
                     .effect(Effect::Acrylic)
-                    .color(Color(38, 53, 68, 170))
+                    .color(Color(38, 54, 70, 170))
                     .build(),
             );
 
@@ -40,8 +40,8 @@ pub fn run() {
                 WebviewUrl::App("index.html".into()),
             )
             .title("Study OS")
-            .inner_size(860.0, 720.0)
-            .min_inner_size(760.0, 640.0)
+            .inner_size(855.0, 760.0)
+            .min_inner_size(855.0, 760.0)
             .resizable(true)
             .decorations(false)
             .always_on_top(false)
