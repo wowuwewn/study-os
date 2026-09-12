@@ -1,19 +1,21 @@
-# Study OS Visual Baseline v0.1
+# Study OS Visual Baseline v0.1 and PIP v0.2
 
 This document records the approved baseline for future iteration. It is not the final product design.
 
 ## Roles
 
 - Main Study OS: the primary daily planning surface, organized around a vertical Today timeline, today's tasks, and a focused quest detail panel.
-- PIP Quest Tracker: a small always-on-top current-quest surface for time, progress, start/pause, completion, and the next event. It is not a scaled-down Main window.
+- PIP Quest Tracker: an always-on-top current-quest surface with Compact, Expanded, and Pet modes. It is not a scaled-down Main window.
 
 ## Approved Figma sources
 
 - Main: https://www.figma.com/design/iGwFUSJ5NJh3Jl9XVw2T6p?node-id=44-216
-- PIP: https://www.figma.com/design/iGwFUSJ5NJh3Jl9XVw2T6p?node-id=44-311
+- PIP Compact: https://www.figma.com/design/iGwFUSJ5NJh3Jl9XVw2T6p?node-id=46-5
+- PIP Expanded: https://www.figma.com/design/iGwFUSJ5NJh3Jl9XVw2T6p?node-id=46-26
+- Pet states: https://www.figma.com/design/iGwFUSJ5NJh3Jl9XVw2T6p?node-id=46-48
 - Composition reference: https://www.figma.com/design/iGwFUSJ5NJh3Jl9XVw2T6p?node-id=44-10
 
-Old nodes `30:5` and `41:3` are not approved references.
+Old nodes `30:5` and `41:3` are not approved references. PIP node `44:311` is deprecated by PIP v0.2.
 
 ## Typography
 
@@ -46,14 +48,15 @@ Old nodes `30:5` and `41:3` are not approved references.
     - checklist
     - full-width start/pause button
     - memo area
-- PIP window
-  - compact header and window controls
-  - status/time
-  - current quest
-  - progress track and replaceable Runner marker
-  - start/pause and completion controls
-  - elapsed time
-  - next event footer
+- PIP v0.2
+  - `compact`: 312×116 logical px, current quest, elapsed/total time, progress, start/pause, next event
+  - `expanded`: the same `pip` window resized to 312×194 logical px, adding subtitle and a short checklist
+  - `pet`: a separate transparent 56×56 logical px always-on-top window with no panel, border, header, or text
+  - one timer/session source of truth remains in the `pip` window and synchronizes Pet state through Tauri events
+  - Compact and Expanded retain Windows Acrylic; Pet intentionally has no Acrylic to avoid a visible rectangle
+  - Pet single click restores Compact, double click opens and focuses Main, and drag moves the Pet window
+
+Pet Mode is a focus-state indicator, not a decorative mascot. Its motion communicates `idle`, `running`, `paused`, and `completed` state while staying at a static desktop position.
 
 ## Future references
 

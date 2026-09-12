@@ -1,5 +1,6 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import MainWindow from "./MainWindow";
+import PetWindow from "./PetWindow";
 import PipWindow from "./PipWindow";
 import "./App.css";
 
@@ -9,7 +10,9 @@ function App() {
       ? getCurrentWindow().label
       : new URLSearchParams(window.location.search).get("view") ?? "pip";
 
-  return label === "main" ? <MainWindow /> : <PipWindow />;
+  if (label === "main") return <MainWindow />;
+  if (label === "pet") return <PetWindow />;
+  return <PipWindow />;
 }
 
 export default App;

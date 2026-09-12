@@ -1,0 +1,17 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="46" height="42" viewBox="0 0 46 42" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Danwoong placeholder">
+<circle id="Ellipse" cx="9" cy="7" r="5" fill="#16243A"/>
+<circle id="Ellipse_2" cx="29" cy="7" r="5" fill="#16243A"/>
+<ellipse id="Ellipse_3" cx="19" cy="18.5" rx="16" ry="13.5" fill="#16243A"/>
+<ellipse id="Ellipse_4" cx="19.5" cy="22" rx="7.5" ry="5" fill="#F1E6D4"/>
+<circle id="Ellipse_5" cx="9" cy="20" r="2" fill="#EFA57E"/>
+<circle id="Ellipse_6" cx="31" cy="20" r="2" fill="#EFA57E"/>
+<ellipse id="Ellipse_7" cx="20.5" cy="33.5" rx="11.5" ry="7.5" fill="#16243A"/>
+<rect id="Leg 1" x="6" y="32" width="14" height="4" rx="2" transform="rotate(25 6 32)" fill="#16243A"/>
+<rect id="Leg 2" x="24" y="32" width="14" height="4" rx="2" transform="rotate(-25 24 32)" fill="#16243A"/>
+<rect id="speed1" y="12" width="10" height="2" rx="1" fill="#72D7C4"/>
+<rect id="speed2" y="19" width="15" height="2" rx="1" fill="#72D7C4"/>
+<rect id="speed3" y="26" width="9" height="2" rx="1" fill="#72D7C4"/>
+<circle id="Ellipse_8" cx="40.5" cy="5.5" r="3.5" fill="#CFE7E1"/>
+</g>
+</svg>
