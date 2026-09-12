@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "clean": "node scripts/clean-generated.mjs",
     "test:data": "node scripts/validate-data-foundation.mjs",
     "test:parser": "node scripts/validate-quick-add-parser.mjs",
     "preview": "vite preview",

@@ -7,19 +7,37 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
+/node_modules/
+/dist/
+/dist-ssr/
+/coverage/
+/.cache/
+/.tmp/
+/tmp/
+/qa/.tmp/
+/qa/tmp/
+/src-tauri/target/
+/src-tauri/gen/schemas/
+
 *.local
+.env
+.env.*
+!.env.example
 *.db
 *.db-shm
 *.db-wal
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite3
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
 .idea
 .DS_Store
+Thumbs.db
+Desktop.ini
 *.suo
 *.ntvs*
 *.njsproj

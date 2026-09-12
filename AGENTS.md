@@ -20,3 +20,10 @@
 - Persist timestamps as UTC ISO 8601 strings and convert them to local time only at the UI boundary.
 - Database schema changes require numbered migrations under `src-tauri/migrations/`.
 - Quick Add natural-language parsing must remain local and deterministic; do not use AI or remote APIs.
+- Remove temporary files created during feature work before that work ends.
+- Remove deprecated implementations only after the replacement is approved and references are checked.
+- Do not accumulate unused duplicate components or files.
+- Never commit build, cache, or generated artifacts.
+- Never delete a migration merely because it is old.
+- Keep only the minimum QA screenshots required for the current milestone.
+- If deletion safety is unclear, preserve the file and report it.

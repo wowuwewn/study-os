@@ -58,9 +58,9 @@ Old nodes `30:5` and `41:3` are not approved references. PIP node `44:311` is de
 
 Pet Mode is a focus-state indicator, not a decorative mascot. Its motion communicates `idle`, `running`, `paused`, and `completed` state while staying at a static desktop position.
 
-## Future references
+## Additional feature references
 
 - Calendar: node `44:333`.
-- Quick Add: node `44:387`.
+- Quick Add v0.1: node `44:387`; implementation details are recorded in `docs/quick-add.md`.
 
-Calendar and Quick Add are future work and are not part of Visual Baseline v0.1 implementation.
+Calendar remains future work and is not part of the current implementation. Quick Add is an independent capture surface and does not change the approved Main/PIP visual baseline.
