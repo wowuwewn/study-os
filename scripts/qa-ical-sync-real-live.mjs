@@ -107,6 +107,7 @@ try {
   const renderedTimelineItems = await main.evaluate("document.querySelectorAll('.timeline-item').length");
 
   const second = await main.evaluate(`(async () => (await import('/src/features/ical-sync/service.ts')).syncIcal())()`);
+  assert.equal(second.notModified, true, "repeat sync must use conditional 304 when the feed is unchanged");
   await wait(500);
   const afterSecond = await main.evaluate(snapshotExpression);
   const syncNowUi = await main.evaluate(`(() => {

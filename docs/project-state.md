@@ -6,8 +6,8 @@ This document is the handoff snapshot for continuing Study OS in a new Codex cha
 
 - Stack: Tauri 2, React 19, TypeScript, Vite, SQLite through `@tauri-apps/plugin-sql`.
 - Application identifier: `com.wowuwewn.studyos`.
-- Baseline commit before the current uncommitted milestone: `ace2387` (`2026-2 실제 시간표 import 적용`).
-- The e-Campus iCal Sync v0.1 milestone remains uncommitted by request.
+- Current implementation baseline: `d5cdb22` (`e-Campus iCal 동기화 구현`).
+- iCal Sync/Dedup v0.1 is complete; the current follow-up only tightens sync-status UX and the real-feed 304 QA assertion.
 - Do not commit secrets or personal schedule URLs/data. Local databases and personal semester JSON files are ignored.
 
 ## Completed functionality
@@ -47,6 +47,7 @@ This document is the handoff snapshot for continuing Study OS in a new Codex cha
   - the first real private feed QA completed on 2026-09-13: `VCALENDAR=1`, `VEVENT=1`, `VTODO=0`, `DATE=2`, `DATE-TIME=0`; observed property buckets were `CALSCALE`, `CLASS`, `DESCRIPTION`, `DTEND`, `DTSTAMP`, `DTSTART`, `METHOD`, `PRODID`, `SEQUENCE`, `SUMMARY`, `UID`, `URL`, `VERSION`, and `X-*` (three), with no recurrence shape; the one supported item classified as Assignment, with zero Event, recurring rule, exception, cancellation, or unsupported items;
   - the real Canvas feed uses a DATE-declared all-day value with an exact midnight suffix. The adapter preserves it as date semantics; non-midnight mismatches remain unsupported instead of being truncated;
   - real-feed repeat sync returned conditional 304 with stable identities and no duplicates. The canonical 7 Courses/11 manual rules were unchanged, no recurring Event rows were materialized, and the actual-date Today result remained valid with zero scheduled items for 2026-09-13.
+  - a failed manual sync now clears any stale prior success summary and reloads the persisted error status before the Settings panel returns to idle; the real-feed QA asserts the repeat request is a conditional 304.
 
 ## Current window structure
 

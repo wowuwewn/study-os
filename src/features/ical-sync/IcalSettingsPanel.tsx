@@ -70,10 +70,14 @@ export default function IcalSettingsPanel({ onClose }: Props) {
   };
 
   const handleSync = () => {
+    setResult(null);
     void run(async () => {
-      const nextResult = await syncIcal();
-      setResult(nextResult);
-      await reload();
+      try {
+        const nextResult = await syncIcal();
+        setResult(nextResult);
+      } finally {
+        await reload();
+      }
     });
   };
 
