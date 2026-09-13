@@ -15,11 +15,19 @@ import type {
 type PersistedFields = "id" | "createdAt" | "updatedAt";
 
 export type CourseInput = Omit<Course, PersistedFields> & { id?: string };
-export type EventInput = Omit<StudyEvent, PersistedFields> & { id?: string };
-export type AssignmentInput = Omit<Assignment, PersistedFields> & { id?: string };
+type EventSyncFields = "timeKind" | "startOn" | "endOnExclusive" | "sourceTimezone";
+type AssignmentSyncFields = "dueOn" | "dueTimezone";
+type RuleSyncFields = "startsOn" | "endsOn";
+export type EventInput = Omit<StudyEvent, PersistedFields | EventSyncFields> &
+  Partial<Pick<StudyEvent, EventSyncFields>> & { id?: string };
+export type AssignmentInput = Omit<Assignment, PersistedFields | AssignmentSyncFields> &
+  Partial<Pick<Assignment, AssignmentSyncFields>> & { id?: string };
 export type StudyTaskInput = Omit<StudyTask, PersistedFields | "steps"> & { id?: string };
 export type SemesterInput = Omit<Semester, PersistedFields> & { id?: string };
-export type RecurringScheduleRuleInput = Omit<RecurringScheduleRule, PersistedFields> & { id?: string };
+export type RecurringScheduleRuleInput = Omit<
+  RecurringScheduleRule,
+  PersistedFields | RuleSyncFields
+> & Partial<Pick<RecurringScheduleRule, RuleSyncFields>> & { id?: string };
 export type RecurringScheduleExceptionInput = Omit<RecurringScheduleException, PersistedFields> & { id?: string };
 
 export interface SourceRepository {

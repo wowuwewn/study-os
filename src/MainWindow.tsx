@@ -5,6 +5,7 @@ import type { ScheduleOccurrence, StudyTask, TaskStep } from "./domain/models";
 import { setTaskStepCompleted, FOCUS_COMMAND_EVENT } from "./data/studyData";
 import { useStudyDashboard } from "./data/useStudyDashboard";
 import { showQuickAddWindow } from "./features/quick-add/window";
+import IcalSettingsPanel from "./features/ical-sync/IcalSettingsPanel";
 
 type MainIconName =
   | "add"
@@ -77,6 +78,7 @@ function formatLocalTime(value: string) {
 }
 
 function formatEventTime(event: ScheduleOccurrence) {
+  if (event.timeKind === "date") return "종일";
   const start = formatLocalTime(event.startAt);
   return event.endAt ? `${start} – ${formatLocalTime(event.endAt)}` : start;
 }
@@ -122,6 +124,7 @@ const LOADING_STEPS = Array.from({ length: 4 }, (_, index) => ({
 
 export default function MainWindow() {
   const [memo, setMemo] = useState("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [now, setNow] = useState(() => new Date());
   const { dashboard, error } = useStudyDashboard();
 
@@ -204,7 +207,12 @@ export default function MainWindow() {
             <MainIcon name="add" />
             <span>추가</span>
           </button>
-          <button className="main-tool-button" type="button" aria-label="설정">
+          <button
+            className="main-tool-button"
+            type="button"
+            aria-label="설정"
+            onClick={() => setSettingsOpen(true)}
+          >
             <MainIcon name="settings" />
           </button>
         </div>
@@ -338,6 +346,7 @@ export default function MainWindow() {
         </div>
       </div>
       {error && <p className="sr-only" role="alert">로컬 데이터를 불러오지 못했습니다.</p>}
+      {settingsOpen && <IcalSettingsPanel onClose={() => setSettingsOpen(false)} />}
     </main>
   );
 }

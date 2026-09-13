@@ -3,6 +3,7 @@ export type IsoDateTime = string;
 
 export type SourceKind = "manual" | "ical" | "ecampus" | "likelion";
 export type EventType = "class" | "exam" | "personal" | "study_block" | "meeting";
+export type EventTimeKind = "date_time" | "date";
 export type AssignmentStatus = "open" | "submitted" | "graded" | "cancelled";
 export type StudyTaskStatus = "todo" | "doing" | "paused" | "done" | "cancelled";
 export type FocusSessionStatus = "running" | "paused" | "completed" | "cancelled";
@@ -51,6 +52,8 @@ export type RecurringScheduleRule = {
   startLocalTime: string;
   endLocalTime: string;
   location: string | null;
+  startsOn: string | null;
+  endsOn: string | null;
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
 };
@@ -83,6 +86,10 @@ export type StudyEvent = {
   location: string | null;
   isFixed: boolean;
   notes: string | null;
+  timeKind: EventTimeKind;
+  startOn: string | null;
+  endOnExclusive: string | null;
+  sourceTimezone: string | null;
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
 };
@@ -95,6 +102,8 @@ export type Assignment = {
   title: string;
   description: string | null;
   dueAt: IsoDateTime | null;
+  dueOn: string | null;
+  dueTimezone: string | null;
   points: number | null;
   submissionType: string | null;
   status: AssignmentStatus;
@@ -169,6 +178,7 @@ export type NewStudyEvent = Pick<StudyEvent, "eventType" | "title" | "startAt"> 
     Pick<
       StudyEvent,
       "sourceId" | "courseId" | "externalId" | "endAt" | "location" | "isFixed" | "notes"
+      | "timeKind" | "startOn" | "endOnExclusive" | "sourceTimezone"
     >
   >;
 
@@ -181,6 +191,8 @@ export type NewAssignment = Pick<Assignment, "title"> &
       | "externalId"
       | "description"
       | "dueAt"
+      | "dueOn"
+      | "dueTimezone"
       | "points"
       | "submissionType"
       | "status"

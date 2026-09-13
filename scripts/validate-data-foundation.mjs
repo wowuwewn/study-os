@@ -16,6 +16,9 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const migrations = await Promise.all([
   readFile(resolve(root, "src-tauri/migrations/001_initial.sql"), "utf8"),
   readFile(resolve(root, "src-tauri/migrations/002_recurring_schedule.sql"), "utf8"),
+  readFile(resolve(root, "src-tauri/migrations/003_ical_sync.sql"), "utf8"),
+  readFile(resolve(root, "src-tauri/migrations/004_ical_date_guards.sql"), "utf8"),
+  readFile(resolve(root, "src-tauri/migrations/005_ical_adapter_version.sql"), "utf8"),
 ]);
 const db = new DatabaseSync(":memory:");
 for (const migration of migrations) db.exec(migration);
@@ -29,10 +32,12 @@ const expectedTables = [
   "assignments",
   "courses",
   "events",
+  "external_sync_items",
   "focus_sessions",
   "recurring_schedule_exceptions",
   "recurring_schedule_rules",
   "semesters",
+  "source_sync_states",
   "sources",
   "study_tasks",
   "task_steps",

@@ -725,6 +725,185 @@ button {
   overflow: hidden;
 }
 
+.settings-backdrop {
+  position: absolute;
+  inset: 53px 0 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(22, 36, 58, 0.18);
+  backdrop-filter: blur(2px);
+}
+
+.ical-settings {
+  width: min(430px, calc(100% - 32px));
+  padding: 26px;
+  border: 1px solid #d5d9dd;
+  border-radius: 14px;
+  color: var(--main-text);
+  background: #fbfaf7;
+  box-shadow: 0 18px 45px rgba(22, 36, 58, 0.16);
+  user-select: text;
+}
+
+.ical-settings > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 22px;
+}
+
+.ical-settings__eyebrow {
+  display: block;
+  margin-bottom: 4px;
+  color: #738091;
+  font-size: 12px;
+}
+
+.ical-settings h2 {
+  margin: 0;
+  font-family: var(--font-jua);
+  font-size: 24px;
+  font-weight: 400;
+}
+
+.ical-settings__close {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  color: #667181;
+  background: transparent;
+  font: 24px/1 var(--font-dodum);
+}
+
+.ical-settings__close:hover:not(:disabled) {
+  background: #eeece7;
+}
+
+.ical-settings__status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 58px;
+  padding: 0 14px;
+  border: 1px solid #e0e2e3;
+  border-radius: 10px;
+  background: #f4f3ef;
+}
+
+.ical-settings__status div {
+  display: grid;
+  gap: 3px;
+}
+
+.ical-settings__status strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ical-settings__status small {
+  color: #778291;
+  font-size: 12px;
+}
+
+.status-dot {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #a7adb4;
+}
+
+.status-dot--connected {
+  background: #7ca88e;
+}
+
+.ical-settings form {
+  display: grid;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.ical-settings form label {
+  font-size: 13px;
+}
+
+.ical-settings form input {
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid #cfd5dc;
+  border-radius: 9px;
+  outline: none;
+  color: var(--main-text);
+  background: #fff;
+  font: 13px var(--font-dodum);
+}
+
+.ical-settings form input:focus {
+  border-color: #8ca9ca;
+  box-shadow: 0 0 0 3px rgba(140, 169, 202, 0.16);
+}
+
+.ical-settings form p {
+  margin: -2px 0 4px;
+  color: #778291;
+  font-size: 11px;
+}
+
+.ical-settings__actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.ical-settings__primary,
+.ical-settings__secondary {
+  height: 42px;
+  padding: 0 18px;
+  border-radius: 9px;
+  font: 14px var(--font-dodum);
+}
+
+.ical-settings__primary {
+  flex: 1;
+  border: 0;
+  color: #17253a;
+  background: var(--main-blue);
+}
+
+.ical-settings__secondary {
+  border: 1px solid #d0d5da;
+  color: #596574;
+  background: transparent;
+}
+
+.ical-settings button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.ical-settings__error,
+.ical-settings__result {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.ical-settings__error {
+  color: #8c4545;
+  background: #f8e9e6;
+}
+
+.ical-settings__result {
+  color: #4f6758;
+  background: #eaf2ec;
+}
+
 .today-pane {
   min-width: 0;
   position: relative;

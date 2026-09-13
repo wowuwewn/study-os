@@ -2,6 +2,9 @@ use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 use tauri_plugin_sql::{Migration, MigrationKind};
 
+mod credential_store;
+mod ical_sync;
+
 #[cfg(target_os = "windows")]
 use tauri::window::{Color, Effect, EffectsBuilder};
 
@@ -32,9 +35,34 @@ pub fn run() {
             sql: include_str!("../migrations/002_recurring_schedule.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 3,
+            description: "ical_sync_foundation",
+            sql: include_str!("../migrations/003_ical_sync.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 4,
+            description: "ical_date_semantics_guards",
+            sql: include_str!("../migrations/004_ical_date_guards.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 5,
+            description: "ical_adapter_version",
+            sql: include_str!("../migrations/005_ical_adapter_version.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()
+        .manage(ical_sync::IcalSyncRuntime::default())
+        .invoke_handler(tauri::generate_handler![
+            ical_sync::ical_connection_status,
+            ical_sync::connect_ical,
+            ical_sync::disconnect_ical,
+            ical_sync::sync_ical,
+        ])
         .plugin(tauri_plugin_opener::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()

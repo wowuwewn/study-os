@@ -60,6 +60,8 @@ export type RecurringScheduleRuleRow = {
   start_local_time: string;
   end_local_time: string;
   location: string | null;
+  starts_on: string | null;
+  ends_on: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -92,6 +94,10 @@ export type EventRow = {
   location: string | null;
   is_fixed: number;
   notes: string | null;
+  time_kind: "date_time" | "date";
+  start_on: string | null;
+  end_on_exclusive: string | null;
+  source_timezone: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -104,6 +110,8 @@ export type AssignmentRow = {
   title: string;
   description: string | null;
   due_at: string | null;
+  due_on: string | null;
+  due_timezone: string | null;
   points: number | null;
   submission_type: string | null;
   status: AssignmentStatus;
@@ -202,6 +210,8 @@ export const mapRecurringScheduleRule = (
   startLocalTime: row.start_local_time,
   endLocalTime: row.end_local_time,
   location: row.location,
+  startsOn: row.starts_on,
+  endsOn: row.ends_on,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
@@ -236,6 +246,10 @@ export const mapEvent = (row: EventRow): StudyEvent => ({
   location: row.location,
   isFixed: Boolean(row.is_fixed),
   notes: row.notes,
+  timeKind: row.time_kind,
+  startOn: row.start_on,
+  endOnExclusive: row.end_on_exclusive,
+  sourceTimezone: row.source_timezone,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
@@ -248,6 +262,8 @@ export const mapAssignment = (row: AssignmentRow): Assignment => ({
   title: row.title,
   description: row.description,
   dueAt: row.due_at,
+  dueOn: row.due_on,
+  dueTimezone: row.due_timezone,
   points: row.points,
   submissionType: row.submission_type,
   status: row.status,

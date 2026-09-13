@@ -179,7 +179,9 @@ export class SqliteRecurringScheduleRepository implements RecurringScheduleRepos
   async list(): Promise<RecurringScheduleRule[]> {
     const database = await getDatabase();
     const rows = await database.select<RecurringScheduleRuleRow[]>(
-      "SELECT * FROM recurring_schedule_rules ORDER BY weekday, start_local_time",
+      `SELECT * FROM recurring_schedule_rules
+       WHERE source_cancelled_at IS NULL AND source_removed_at IS NULL
+       ORDER BY weekday, start_local_time`,
     );
     return rows.map(mapRecurringScheduleRule);
   }
@@ -188,7 +190,9 @@ export class SqliteRecurringScheduleRepository implements RecurringScheduleRepos
     const database = await getDatabase();
     const rows = await database.select<RecurringScheduleRuleRow[]>(
       `SELECT * FROM recurring_schedule_rules
-       WHERE semester_id = ?1 ORDER BY weekday, start_local_time`,
+       WHERE semester_id = ?1
+         AND source_cancelled_at IS NULL AND source_removed_at IS NULL
+       ORDER BY weekday, start_local_time`,
       [semesterId],
     );
     return rows.map(mapRecurringScheduleRule);
@@ -210,14 +214,14 @@ export class SqliteRecurringScheduleRepository implements RecurringScheduleRepos
     const now = utcNow();
     await database.execute(
       `INSERT INTO recurring_schedule_rules
-        (id, semester_id, course_id, source_id, external_id, weekday, start_local_time, end_local_time, location, created_at, updated_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?10)
+        (id, semester_id, course_id, source_id, external_id, weekday, start_local_time, end_local_time, location, created_at, updated_at, starts_on, ends_on)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?10, ?11, ?12)
        ON CONFLICT(id) DO UPDATE SET
         semester_id=excluded.semester_id, course_id=excluded.course_id,
         source_id=excluded.source_id, external_id=excluded.external_id,
         weekday=excluded.weekday, start_local_time=excluded.start_local_time,
         end_local_time=excluded.end_local_time, location=excluded.location,
-        updated_at=excluded.updated_at`,
+        updated_at=excluded.updated_at, starts_on=excluded.starts_on, ends_on=excluded.ends_on`,
       [
         id,
         input.semesterId,
@@ -229,6 +233,8 @@ export class SqliteRecurringScheduleRepository implements RecurringScheduleRepos
         input.endLocalTime,
         input.location,
         now,
+        input.startsOn ?? null,
+        input.endsOn ?? null,
       ],
     );
     const saved = await this.get(id);
@@ -318,7 +324,11 @@ export class SqliteEventRepository implements EventRepository {
   async listBetween(startAt: string, endAt: string): Promise<StudyEvent[]> {
     const database = await getDatabase();
     const rows = await database.select<EventRow[]>(
-      "SELECT * FROM events WHERE start_at >= ?1 AND start_at < ?2 ORDER BY start_at",
+      `SELECT * FROM events
+       WHERE ((time_kind = 'date_time' AND start_at >= ?1 AND start_at < ?2)
+          OR time_kind = 'date')
+         AND source_cancelled_at IS NULL AND source_removed_at IS NULL
+       ORDER BY start_at`,
       [startAt, endAt],
     );
     return rows.map(mapEvent);
@@ -336,13 +346,15 @@ export class SqliteEventRepository implements EventRepository {
     const now = utcNow();
     await database.execute(
       `INSERT INTO events
-        (id, source_id, course_id, external_id, event_type, title, start_at, end_at, location, is_fixed, notes, created_at, updated_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?12)
+        (id, source_id, course_id, external_id, event_type, title, start_at, end_at, location, is_fixed, notes, created_at, updated_at, time_kind, start_on, end_on_exclusive, source_timezone)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?12, ?13, ?14, ?15, ?16)
        ON CONFLICT(id) DO UPDATE SET
         source_id=excluded.source_id, course_id=excluded.course_id, external_id=excluded.external_id,
         event_type=excluded.event_type, title=excluded.title, start_at=excluded.start_at,
         end_at=excluded.end_at, location=excluded.location, is_fixed=excluded.is_fixed,
-        notes=excluded.notes, updated_at=excluded.updated_at`,
+        notes=excluded.notes, updated_at=excluded.updated_at, time_kind=excluded.time_kind,
+        start_on=excluded.start_on, end_on_exclusive=excluded.end_on_exclusive,
+        source_timezone=excluded.source_timezone`,
       [
         id,
         input.sourceId,
@@ -356,6 +368,10 @@ export class SqliteEventRepository implements EventRepository {
         input.isFixed ? 1 : 0,
         input.notes,
         now,
+        input.timeKind ?? "date_time",
+        input.startOn ?? null,
+        input.endOnExclusive ?? null,
+        input.sourceTimezone ?? null,
       ],
     );
     const saved = await this.get(id);
@@ -373,7 +389,9 @@ export class SqliteAssignmentRepository implements AssignmentRepository {
   async listOpen(): Promise<Assignment[]> {
     const database = await getDatabase();
     const rows = await database.select<AssignmentRow[]>(
-      "SELECT * FROM assignments WHERE status = 'open' ORDER BY due_at IS NULL, due_at",
+      `SELECT * FROM assignments
+       WHERE status = 'open' AND source_removed_at IS NULL
+       ORDER BY due_at IS NULL AND due_on IS NULL, COALESCE(due_at, due_on)`,
     );
     return rows.map(mapAssignment);
   }
@@ -390,13 +408,14 @@ export class SqliteAssignmentRepository implements AssignmentRepository {
     const now = utcNow();
     await database.execute(
       `INSERT INTO assignments
-        (id, source_id, course_id, external_id, title, description, due_at, points, submission_type, status, submitted_at, graded_at, created_at, updated_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?13)
+        (id, source_id, course_id, external_id, title, description, due_at, points, submission_type, status, submitted_at, graded_at, created_at, updated_at, due_on, due_timezone)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?13, ?14, ?15)
        ON CONFLICT(id) DO UPDATE SET
         source_id=excluded.source_id, course_id=excluded.course_id, external_id=excluded.external_id,
         title=excluded.title, description=excluded.description, due_at=excluded.due_at,
         points=excluded.points, submission_type=excluded.submission_type, status=excluded.status,
-        submitted_at=excluded.submitted_at, graded_at=excluded.graded_at, updated_at=excluded.updated_at`,
+        submitted_at=excluded.submitted_at, graded_at=excluded.graded_at, updated_at=excluded.updated_at,
+        due_on=excluded.due_on, due_timezone=excluded.due_timezone`,
       [
         id,
         input.sourceId,
@@ -411,6 +430,8 @@ export class SqliteAssignmentRepository implements AssignmentRepository {
         input.submittedAt,
         input.gradedAt,
         now,
+        input.dueOn ?? null,
+        input.dueTimezone ?? null,
       ],
     );
     const saved = await this.get(id);

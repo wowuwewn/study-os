@@ -29,6 +29,20 @@ function isInRange(value: string, startAt: string, endAt: string) {
   return instant >= Date.parse(startAt) && instant < Date.parse(endAt);
 }
 
+function eventIsInRange(event: StudyEvent, startAt: string, endAt: string) {
+  if (event.timeKind !== "date" || !event.startOn) {
+    return isInRange(event.startAt, startAt, endAt);
+  }
+  const timezone = event.sourceTimezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const rangeStartsOn = dateInTimeZone(new Date(startAt), timezone);
+  const rangeEndsOnExclusive = addCalendarDays(
+    dateInTimeZone(new Date(Date.parse(endAt) - 1), timezone),
+    1,
+  );
+  const eventEndsOnExclusive = event.endOnExclusive ?? addCalendarDays(event.startOn, 1);
+  return event.startOn < rangeEndsOnExclusive && eventEndsOnExclusive > rangeStartsOn;
+}
+
 function durationMinutes(rule: RecurringScheduleRule) {
   return localTimeMinutes(rule.endLocalTime) - localTimeMinutes(rule.startLocalTime);
 }
@@ -66,6 +80,10 @@ function recurringOccurrence(
     location: exception?.locationOverride ?? rule.location ?? course.location,
     isFixed: true,
     notes: exception?.notes ?? null,
+    timeKind: "date_time",
+    startOn: null,
+    endOnExclusive: null,
+    sourceTimezone: semester.timezone,
   };
 }
 
@@ -95,7 +113,7 @@ export function buildScheduleOccurrences(input: OccurrenceInput): ScheduleOccurr
     ]),
   );
   const occurrences = input.events
-    .filter((event) => isInRange(event.startAt, input.startAt, input.endAt))
+    .filter((event) => eventIsInRange(event, input.startAt, input.endAt))
     .map(eventOccurrence);
   const seen = new Set<string>();
 
@@ -110,7 +128,15 @@ export function buildScheduleOccurrences(input: OccurrenceInput): ScheduleOccurr
       1,
     );
     while (date <= finalDate) {
-      if (date >= semester.startsOn && date <= semester.endsOn && weekdayOfDate(date) === rule.weekday) {
+      const ruleStartsOn = rule.startsOn ?? semester.startsOn;
+      const ruleEndsOn = rule.endsOn ?? semester.endsOn;
+      if (
+        date >= semester.startsOn
+        && date <= semester.endsOn
+        && date >= ruleStartsOn
+        && date <= ruleEndsOn
+        && weekdayOfDate(date) === rule.weekday
+      ) {
         const exception = exceptionByOccurrence.get(`${rule.id}:${date}`);
         const occurrence = recurringOccurrence(rule, semester, course, date, exception);
         if (occurrence && isInRange(occurrence.startAt, input.startAt, input.endAt)) {

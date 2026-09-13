@@ -287,6 +287,25 @@ const boundaryOccurrence = buildScheduleOccurrences({
 });
 assert.equal(boundaryOccurrence[0]?.startAt, "2026-09-13T15:30:00.000Z");
 
+const multiDayDateEvent = {
+  ...oneOff,
+  id: "test:event:multi-day-date",
+  title: "Synthetic multi-day all-day event",
+  startAt: "2026-09-17T15:00:00.000Z",
+  timeKind: "date",
+  startOn: "2026-09-18",
+  endOnExclusive: "2026-09-21",
+  sourceTimezone: "Asia/Seoul",
+};
+const middleDay = buildScheduleOccurrences({
+  ...baseOccurrenceInput,
+  rules: [],
+  events: [multiDayDateEvent],
+  startAt: "2026-09-18T15:00:00.000Z",
+  endAt: "2026-09-19T15:00:00.000Z",
+});
+assert.equal(middleDay[0]?.id, multiDayDateEvent.id, "multi-day DATE events must overlap every covered local date");
+
 const invalidCases = [
   (value) => { value.semester.endsOn = "2026-08-31"; },
   (value) => { value.courses[0].meetings[0].weekday = 7; },

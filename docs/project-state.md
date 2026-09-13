@@ -6,8 +6,8 @@ This document is the handoff snapshot for continuing Study OS in a new Codex cha
 
 - Stack: Tauri 2, React 19, TypeScript, Vite, SQLite through `@tauri-apps/plugin-sql`.
 - Application identifier: `com.wowuwewn.studyos`.
-- Baseline commit before the current uncommitted milestone: `d5eb185` (`Codex 자율 작업 및 검수 규칙 추가`).
-- The 2026-2 timetable milestone remains uncommitted by request.
+- Baseline commit before the current uncommitted milestone: `ace2387` (`2026-2 실제 시간표 import 적용`).
+- The e-Campus iCal Sync v0.1 milestone remains uncommitted by request.
 - Do not commit secrets or personal schedule URLs/data. Local databases and personal semester JSON files are ignored.
 
 ## Completed functionality
@@ -32,6 +32,21 @@ This document is the handoff snapshot for continuing Study OS in a new Codex cha
   - re-import preserves Semester, Course, and rule IDs without creating duplicate rows;
   - recurring classes remain query-time occurrences and do not create Event rows.
 - The old fixed-date sample timeline Events are no longer seeded. Existing user/imported Events are not overwritten.
+- e-Campus iCal Sync v0.1:
+  - the Main settings entry provides connect, connection status, Sync Now, last-success time, sanitized errors, and disconnect without redesigning Main;
+  - only `https://canvas.dankook.ac.kr` on port 443 is accepted, with same-host redirects, timeouts, a 5 MiB streaming response cap, and single-flight sync;
+  - the private URL is handled only by Rust through Windows Credential Manager and is never stored in SQLite, Git, logs, or raw fixture output;
+  - Rust fetches and parses VEVENT/VTODO, DATE/date-time values, constrained weekly RRULE, EXDATE, RECURRENCE-ID, SEQUENCE, and explicit STATUS:CANCELLED;
+  - normalized data is applied atomically to Source, Event, Assignment, RecurringScheduleRule, and recurring exceptions with stable UID hashes and a global external identity ledger;
+  - deterministic Canvas evidence is required for Assignment; uncertain VEVENT values remain Event;
+  - recurring occurrences are not materialized as Event rows, stale revisions cannot overwrite newer ones, and canonical manual recurring rules are linked without provider mutation;
+  - feed absence does not delete rows because authoritative-full-snapshot behavior is still unverified; generation tracking and the disabled reconciliation flag prepare that later step;
+  - a successful changed sync emits `study-os-data-changed` once. A conditional 304 updates sync success without emitting a data-change event.
+  - parsing is tolerant at the item boundary: standard auxiliary components and optional/unknown properties do not reject the feed, while unsupported DTSTART/DTEND/DUE/RRULE/RECURRENCE-ID semantics skip only the affected item and increment redacted reason counts;
+  - diagnostics expose only allowlisted component/property names, DATE/date-time counts, recurrence-shape buckets, and fixed reason codes; provider values are never returned or logged;
+  - the first real private feed QA completed on 2026-09-13: `VCALENDAR=1`, `VEVENT=1`, `VTODO=0`, `DATE=2`, `DATE-TIME=0`; observed property buckets were `CALSCALE`, `CLASS`, `DESCRIPTION`, `DTEND`, `DTSTAMP`, `DTSTART`, `METHOD`, `PRODID`, `SEQUENCE`, `SUMMARY`, `UID`, `URL`, `VERSION`, and `X-*` (three), with no recurrence shape; the one supported item classified as Assignment, with zero Event, recurring rule, exception, cancellation, or unsupported items;
+  - the real Canvas feed uses a DATE-declared all-day value with an exact midnight suffix. The adapter preserves it as date semantics; non-midnight mismatches remain unsupported instead of being truncated;
+  - real-feed repeat sync returned conditional 304 with stable identities and no duplicates. The canonical 7 Courses/11 manual rules were unchanged, no recurring Event rows were materialized, and the actual-date Today result remained valid with zero scheduled items for 2026-09-13.
 
 ## Current window structure
 
@@ -68,6 +83,9 @@ Migrations:
 
 - `001_initial.sql`: `app_meta`, sources, courses, one-off events, assignments, study tasks, task steps, focus sessions, indexes, and single-active-focus constraint.
 - `002_recurring_schedule.sql`: semesters, recurring schedule rules, recurring schedule exceptions, natural/external duplicate constraints, query indexes, and removal of only the deterministic legacy `seed:event:*` timeline rows.
+- `003_ical_sync.sql`: per-Source sync state, conditional request metadata, sync generations, cross-domain external identity ledger, provider cancellation/removal metadata, and explicit DATE semantics.
+- `004_ical_date_guards.sql`: write guards for Event/Assignment DATE versus date-time invariants and recurring rule date bounds.
+- `005_ical_adapter_version.sql`: parser/adapter version tracking so an adapter upgrade invalidates stale conditional-request metadata and reprocesses the feed safely.
 
 The public dummy import template is `semester.example.json`. Personal files should use `semester.local.json`, `semester.*.local.json`, or `local-schedule/`; these paths are ignored by Git. There is currently no import Settings UI or file picker.
 
@@ -97,6 +115,8 @@ Important services and APIs:
 - `listTodaySchedule(now?)`: returns the current system-local day's recurring classes and one-off Events.
 - `listScheduleOccurrencesBetween(startAt, endAt)`: bounded range API intended for Today, future Calendar, and the Decision Engine.
 - `buildScheduleOccurrences()`: pure occurrence generation, exception application, Event merge, and chronological sort.
+- Rust Tauri commands `ical_connection_status`, `connect_ical`, `sync_ical`, and `disconnect_ical`: main-window-only secret and sync boundary.
+- `src/features/ical-sync/service.ts`: typed frontend command adapter; React never receives provider raw data or the stored URL.
 
 React components must not issue SQL directly. Extend repository contracts and services first.
 
@@ -125,10 +145,16 @@ npm run build
 npm run test:data
 npm run test:parser
 npm run test:schedule
+npm run test:ical
 npm run tauri dev
+npm run qa:ical
+npm run qa:ical:real
+npm run qa:windows
 cd src-tauri
+cargo test
 cargo check
 cargo fmt --check
+cargo clippy --all-targets -- -D warnings
 ```
 
 - `test:data`: migrations, idempotent seed, repository-level task/focus lifecycle, restart recovery, and schedule schema constraints.
@@ -136,14 +162,18 @@ cargo fmt --check
 - `test:schedule`: semester import, import idempotency, weekday and semester bounds, Event merge order, timezone boundary, invalid input, and exception behavior.
 - `test:schedule` also covers the canonical 2026-2 shape: 7 Courses, 11 weekly rules, seed Course reuse without metadata loss, existing Semester date preservation, idempotent re-import, and canonical Monday occurrences.
 - `npm run qa:schedule-import` reads ignored `semester.local.json`, invokes the existing import service inside a running Windows Tauri app through WebView2 CDP, imports twice, and verifies counts, stable IDs, zero Event materialization, current-day Today output, and canonical Monday occurrences.
+- `test:ical`: migrations and date guards plus Rust endpoint, parsing, classification, recurrence, cancellation tombstone, stale-sequence, cross-kind transition, atomicity, idempotency, no-missing-delete, and manual-rule reuse tests against redacted synthetic data.
+- `npm run qa:ical`: actual Windows Tauri and Credential Manager connect/status/disconnect QA, connected and disconnected Settings states, SQLite secret absence, and cleanup verification. It deliberately does not perform network sync without the user's private feed URL.
+- `npm run qa:ical:real`: uses only the existing Credential Manager entry, performs real Sync Now and repeated sync, and reports only redacted aggregate diagnostics while asserting stable identities, canonical 7-course/11-rule preservation, Today refresh, and unchanged Focus state.
+- `npm run qa:windows`: actual Main/PIP/Pet regression for shared quest state, Compact/Expanded sizing, Pet transition, and unchanged Focus state.
 - `scripts/qa-quick-add-live.mjs` is an actual-app CDP QA helper, not an npm test script. It expects a running dev app with WebView2 remote debugging.
 - `npm run clean` removes only allowlisted, reproducible build/cache/temp outputs. It does not remove source, migrations, docs, assets, or local application data.
 
 ## Not implemented yet
 
 - There is still no schedule import Settings UI or file picker; the completed actual timetable import uses the ignored local file plus the development live-import helper.
-- No e-Campus login, scraping, assignment collection, iCal fetch, remote adapter, or credential storage exists.
-- No background synchronization, sync cursor, conflict resolution, deletion reconciliation, or cross-provider dedup workflow exists. Current `(source_id, external_id)` and natural-key protections cover import-level duplicates only.
+- Authenticated e-Campus detail enrichment, login/scraping, and background synchronization are not implemented.
+- Missing-item deletion reconciliation remains deliberately disabled until the official feed is verified as an authoritative full snapshot. Cross-provider semantic dedup beyond exact recurring-rule reuse is not implemented.
 - Calendar UI is not implemented.
 - Decision Engine and recommendation/scoring logic are not implemented.
 - Last Safe Start calculation is not implemented.
@@ -155,8 +185,8 @@ cargo fmt --check
 
 ## Next priorities
 
-1. Add e-Campus/iCal integration without storing credentials or private URLs in Git.
-2. Add sync and dedup semantics beyond the current import-level unique keys.
+1. Verify whether the feed is authoritative before enabling generation-based missing-item reconciliation.
+2. Add authenticated e-Campus detail enrichment only for fields that iCal cannot provide.
 3. Implement Calendar using node `44:333` and `listScheduleOccurrencesBetween()`.
 4. Implement the Decision Engine against the existing Event/Assignment/StudyTask/ScheduleOccurrence separation.
 5. Implement Last Safe Start.
