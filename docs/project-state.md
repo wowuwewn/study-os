@@ -6,8 +6,8 @@ This document is the handoff snapshot for continuing Study OS in a new Codex cha
 
 - Stack: Tauri 2, React 19, TypeScript, Vite, SQLite through `@tauri-apps/plugin-sql`.
 - Application identifier: `com.wowuwewn.studyos`.
-- Current implementation baseline: `d5cdb22` (`e-Campus iCal 동기화 구현`).
-- iCal Sync/Dedup v0.1 is complete; the current follow-up only tightens sync-status UX and the real-feed 304 QA assertion.
+- Latest completed iCal baseline before Calendar v0.1: `7067bdc` (`iCal 동기화 상태 UX 마무리`).
+- iCal Sync/Dedup v0.1 and Calendar v0.1 are complete.
 - Do not commit secrets or personal schedule URLs/data. Local databases and personal semester JSON files are ignored.
 
 ## Completed functionality
@@ -48,6 +48,13 @@ This document is the handoff snapshot for continuing Study OS in a new Codex cha
   - the real Canvas feed uses a DATE-declared all-day value with an exact midnight suffix. The adapter preserves it as date semantics; non-midnight mismatches remain unsupported instead of being truncated;
   - real-feed repeat sync returned conditional 304 with stable identities and no duplicates. The canonical 7 Courses/11 manual rules were unchanged, no recurring Event rows were materialized, and the actual-date Today result remained valid with zero scheduled items for 2026-09-13.
   - a failed manual sync now clears any stale prior success summary and reloads the persisted error status before the Settings panel returns to idle; the real-feed QA asserts the repeat request is a conditional 304.
+- Calendar v0.1:
+  - Figma node `44:333` is implemented as an independent 311×433 borderless Calendar widget without changing Main, PIP, or Pet presentation;
+  - month navigation, date selection, stale-response protection, six-row month support, selected-day agenda, explicit `+N` overflow, and the Figma-aligned three-row `다가오는 마감` fallback are implemented; upcoming deadlines can cross the displayed month boundary;
+  - Semester recurring occurrences, Quick Add/manual one-off Events, and normalized iCal Events come only through `listScheduleOccurrencesBetween()`; open iCal Assignments remain a separate domain collection and are merged only in the Calendar read model;
+  - days containing schedule or deadline data carry a restrained marker and accessible item labels; no provider raw payload, external identity, or integration metadata is rendered;
+  - the widget reloads on `study-os-data-changed`, so Quick Add saves and changed iCal syncs appear without reopening it;
+  - Windows QA verified the real 2026-2 range, a temporary one-off Event refresh, the actual iCal Assignment rendered on its due date, provider identity non-rendering, 311×433 sizing, six-row spacing, and unchanged FocusSession state. The temporary Event and private-data screenshot were removed after QA.
 
 ## Current window structure
 
@@ -59,6 +66,7 @@ All windows are created in Rust from `src-tauri/src/lib.rs` and load the same `i
 | `pip` | 312×116 | visible, fixed-size, always on top | Compact quest tracker; React resizes it to 312×194 for Expanded |
 | `pet` | 56×56 | hidden, fixed-size, transparent, always on top, skipped taskbar | Pet focus-state indicator; shown when PIP is hidden |
 | `quick-add` | 810×126 | hidden, fixed-size, transparent, always on top, skipped taskbar | Global keyboard capture surface |
+| `calendar` | 311×433 | visible, fixed-size, transparent shell | Figma `44:333` monthly schedule/deadline widget |
 
 Windows-specific behavior:
 
@@ -114,7 +122,8 @@ Important services and APIs:
 - `validateSemesterScheduleImport()`: validates the version 1 semester JSON contract.
 - `importLocalSemesterSchedule()` / `importLocalSemesterScheduleJson()`: validation followed by manual Source lookup, Semester upsert, Course upsert, and rule upsert.
 - `listTodaySchedule(now?)`: returns the current system-local day's recurring classes and one-off Events.
-- `listScheduleOccurrencesBetween(startAt, endAt)`: bounded range API intended for Today, future Calendar, and the Decision Engine.
+- `listScheduleOccurrencesBetween(startAt, endAt)`: bounded range API shared by Today, Calendar, and the future Decision Engine.
+- `loadCalendarRange(range)`: Calendar read model that preserves separate `ScheduleOccurrence[]` and `Assignment[]` collections while using the existing schedule range API.
 - `buildScheduleOccurrences()`: pure occurrence generation, exception application, Event merge, and chronological sort.
 - Rust Tauri commands `ical_connection_status`, `connect_ical`, `sync_ical`, and `disconnect_ical`: main-window-only secret and sync boundary.
 - `src/features/ical-sync/service.ts`: typed frontend command adapter; React never receives provider raw data or the stored URL.
@@ -129,7 +138,7 @@ React components must not issue SQL directly. Extend repository contracts and se
 - Pet states: node `46:48`.
 - Overall composition reference: node `44:10`.
 - Quick Add v0.1: node `44:387`.
-- Future Calendar reference: node `44:333`.
+- Calendar: node `44:333`.
 
 Do not use Main nodes `30:5` or `41:3`. PIP node `44:311` is deprecated. Approved visual details are recorded in `docs/design-spec.md`.
 
@@ -147,9 +156,11 @@ npm run test:data
 npm run test:parser
 npm run test:schedule
 npm run test:ical
+npm run test:calendar
 npm run tauri dev
 npm run qa:ical
 npm run qa:ical:real
+npm run qa:calendar
 npm run qa:windows
 cd src-tauri
 cargo test
@@ -164,8 +175,10 @@ cargo clippy --all-targets -- -D warnings
 - `test:schedule` also covers the canonical 2026-2 shape: 7 Courses, 11 weekly rules, seed Course reuse without metadata loss, existing Semester date preservation, idempotent re-import, and canonical Monday occurrences.
 - `npm run qa:schedule-import` reads ignored `semester.local.json`, invokes the existing import service inside a running Windows Tauri app through WebView2 CDP, imports twice, and verifies counts, stable IDs, zero Event materialization, current-day Today output, and canonical Monday occurrences.
 - `test:ical`: migrations and date guards plus Rust endpoint, parsing, classification, recurrence, cancellation tombstone, stale-sequence, cross-kind transition, atomicity, idempotency, no-missing-delete, and manual-rule reuse tests against redacted synthetic data.
+- `test:calendar`: month-grid and six-row layout data, local month bounds, Assignment DATE/date-time filtering, recurring/Quick Add/iCal Event/Assignment read-model separation and sort, and multi-day DATE coverage.
 - `npm run qa:ical`: actual Windows Tauri and Credential Manager connect/status/disconnect QA, connected and disconnected Settings states, SQLite secret absence, and cleanup verification. It deliberately does not perform network sync without the user's private feed URL.
 - `npm run qa:ical:real`: uses only the existing Credential Manager entry, performs real Sync Now and repeated sync, and reports only redacted aggregate diagnostics while asserting stable identities, canonical 7-course/11-rule preservation, Today refresh, and unchanged Focus state.
+- `npm run qa:calendar`: actual Windows Calendar window, range-service data, actual Semester recurrence, temporary one-off Event refresh, actual iCal Assignment due-month inclusion, provider identity non-rendering, Focus state, and one temporary visual capture. It removes its temporary Event; delete `qa/.tmp/` after visual inspection.
 - `npm run qa:windows`: actual Main/PIP/Pet regression for shared quest state, Compact/Expanded sizing, Pet transition, and unchanged Focus state.
 - `scripts/qa-quick-add-live.mjs` is an actual-app CDP QA helper, not an npm test script. It expects a running dev app with WebView2 remote debugging.
 - `npm run clean` removes only allowlisted, reproducible build/cache/temp outputs. It does not remove source, migrations, docs, assets, or local application data.
@@ -175,7 +188,6 @@ cargo clippy --all-targets -- -D warnings
 - There is still no schedule import Settings UI or file picker; the completed actual timetable import uses the ignored local file plus the development live-import helper.
 - Authenticated e-Campus detail enrichment, login/scraping, and background synchronization are not implemented.
 - Missing-item deletion reconciliation remains deliberately disabled until the official feed is verified as an authoritative full snapshot. Cross-provider semantic dedup beyond exact recurring-rule reuse is not implemented.
-- Calendar UI is not implemented.
 - Decision Engine and recommendation/scoring logic are not implemented.
 - Last Safe Start calculation is not implemented.
 - Week, Tasks, and Notes navigation destinations are not implemented; their Main tabs are presentational.
@@ -188,9 +200,8 @@ cargo clippy --all-targets -- -D warnings
 
 1. Verify whether the feed is authoritative before enabling generation-based missing-item reconciliation.
 2. Add authenticated e-Campus detail enrichment only for fields that iCal cannot provide.
-3. Implement Calendar using node `44:333` and `listScheduleOccurrencesBetween()`.
-4. Implement the Decision Engine against the existing Event/Assignment/StudyTask/ScheduleOccurrence separation.
-5. Implement Last Safe Start.
-6. Implement Week and Tasks surfaces; keep Notes out of scope unless separately prioritized.
-7. Perform Windows polish and release-oriented QA.
-8. Replace the Pet placeholder with the final Danwoong animation while preserving the existing state/event contract.
+3. Gate B: decide the Decision Engine v1 policy against the existing Event/Assignment/StudyTask/ScheduleOccurrence separation before implementation.
+4. Implement Last Safe Start only after the Decision Engine policy is approved.
+5. Implement Week and Tasks surfaces; keep Notes out of scope unless separately prioritized.
+6. Perform Windows polish and release-oriented QA.
+7. Replace the Pet placeholder with the final Danwoong animation while preserving the existing state/event contract.

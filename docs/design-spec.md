@@ -63,4 +63,4 @@ Pet Mode is a focus-state indicator, not a decorative mascot. Its motion communi
 - Calendar: node `44:333`.
 - Quick Add v0.1: node `44:387`; implementation details are recorded in `docs/quick-add.md`.
 
-Calendar remains future work and is not part of the current implementation. Quick Add is an independent capture surface and does not change the approved Main/PIP visual baseline.
+Calendar node `44:333` is implemented as an independent 311×433 widget. The v0.1 data-display requirements add restrained day markers and a selected-date agenda state while retaining the source node's geometry, palette, typography, and three-row lower information area. Quick Add remains an independent capture surface. Neither feature changes the approved Main/PIP visual baseline.

@@ -3,6 +3,7 @@ import MainWindow from "./MainWindow";
 import PetWindow from "./PetWindow";
 import PipWindow from "./PipWindow";
 import QuickAddWindow from "./features/quick-add/QuickAddWindow";
+import CalendarWindow from "./features/calendar/CalendarWindow";
 import "./App.css";
 
 function App() {
@@ -14,6 +15,7 @@ function App() {
   if (label === "main") return <MainWindow />;
   if (label === "pet") return <PetWindow />;
   if (label === "quick-add") return <QuickAddWindow />;
+  if (label === "calendar") return <CalendarWindow />;
   return <PipWindow />;
 }
 

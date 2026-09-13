@@ -42,7 +42,7 @@ const entries = await Promise.all(targets.map(async (target) => {
   return [await session.evaluate("window.__TAURI_INTERNALS__?.metadata?.currentWindow?.label"), session];
 }));
 const windows = Object.fromEntries(entries);
-assert.deepEqual(Object.keys(windows).sort(), ["main", "pet", "pip", "quick-add"]);
+assert.deepEqual(Object.keys(windows).sort(), ["calendar", "main", "pet", "pip", "quick-add"]);
 
 try {
   const focusBefore = await windows.main.evaluate(`(async () => {

@@ -139,17 +139,50 @@ pub fn run() {
                 )?;
             }
 
-            WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
-                .title("Study OS")
-                .inner_size(855.0, 760.0)
-                .min_inner_size(855.0, 760.0)
-                .resizable(true)
-                .decorations(false)
-                .always_on_top(false)
-                .visible(true)
-                .shadow(true)
-                .center()
-                .build()?;
+            let main_window =
+                WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+                    .title("Study OS")
+                    .inner_size(855.0, 760.0)
+                    .min_inner_size(855.0, 760.0)
+                    .resizable(true)
+                    .decorations(false)
+                    .always_on_top(false)
+                    .visible(true)
+                    .shadow(true)
+                    .center()
+                    .build()?;
+
+            let calendar_window =
+                WebviewWindowBuilder::new(app, "calendar", WebviewUrl::App("index.html".into()))
+                    .title("Study OS Calendar")
+                    .inner_size(311.0, 433.0)
+                    .resizable(false)
+                    .decorations(false)
+                    .always_on_top(false)
+                    .transparent(true)
+                    .visible(false)
+                    .shadow(true)
+                    .build()?;
+
+            if let Some(monitor) = main_window.current_monitor()? {
+                let main_position = main_window.outer_position()?;
+                let main_size = main_window.outer_size()?;
+                let scale = main_window.scale_factor()?;
+                let gap = (16.0 * scale).round() as i32;
+                let calendar_width = (311.0 * scale).round() as i32;
+                let monitor_left = monitor.position().x;
+                let monitor_right = monitor_left + monitor.size().width as i32;
+                let right = main_position.x + main_size.width as i32 + gap;
+                let x = if right + calendar_width <= monitor_right {
+                    right
+                } else {
+                    (main_position.x - calendar_width - gap).max(monitor_left)
+                };
+                calendar_window.set_position(tauri::PhysicalPosition::new(x, main_position.y))?;
+            } else {
+                calendar_window.center()?;
+            }
+            calendar_window.show()?;
 
             WebviewWindowBuilder::new(
                 app,

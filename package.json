@@ -10,10 +10,12 @@
     "test:data": "node scripts/validate-data-foundation.mjs",
     "test:parser": "node scripts/validate-quick-add-parser.mjs",
     "test:schedule": "node scripts/validate-schedule-foundation.mjs",
+    "test:calendar": "node scripts/validate-calendar-model.mjs",
     "test:ical": "node scripts/validate-ical-sync.mjs && cargo test --manifest-path src-tauri/Cargo.toml ical_sync::tests",
     "qa:schedule-import": "node scripts/qa-semester-import-live.mjs semester.local.json",
     "qa:ical": "node scripts/qa-ical-sync-live.mjs",
     "qa:ical:real": "node scripts/qa-ical-sync-real-live.mjs",
+    "qa:calendar": "node scripts/qa-calendar-live.mjs",
     "qa:windows": "node scripts/qa-window-regression-live.mjs",
     "preview": "vite preview",
     "tauri": "tauri"

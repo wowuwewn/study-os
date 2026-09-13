@@ -147,7 +147,7 @@ const sessions = await Promise.all(targets.map(async (target) => {
   return [label, session];
 }));
 const windows = Object.fromEntries(sessions);
-assert.deepEqual(Object.keys(windows).sort(), ["main", "pet", "pip", "quick-add"]);
+assert.deepEqual(Object.keys(windows).sort(), ["calendar", "main", "pet", "pip", "quick-add"]);
 const quick = windows["quick-add"];
 const main = windows.main;
 const before = await queryData(main);
@@ -211,7 +211,7 @@ await press(quick, "Escape", "Escape");
 pressGlobalShortcut();
 await wait(250);
 const repeatedTargets = await (await fetch(CDP_URL)).json();
-assert.equal(repeatedTargets.length, 4);
+assert.equal(repeatedTargets.length, 5);
 await press(quick, "Escape", "Escape");
 
 const after = await queryData(main);

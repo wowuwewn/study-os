@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capabilities for the Study OS PIP and main windows",
-  "windows": ["pip", "main", "pet", "quick-add"],
+  "windows": ["pip", "main", "pet", "quick-add", "calendar"],
   "permissions": [
     "core:default",
     "core:window:allow-close",
