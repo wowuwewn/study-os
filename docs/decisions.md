@@ -165,6 +165,30 @@ Never:
 - aggressively poll
 - make the UI depend directly on provider-specific raw data
 
+## iCal missing-item reconciliation gate
+
+Decision date: 2026-09-18. Status: `UNVERIFIED`; missing-item reconciliation remains disabled.
+
+Official meaning:
+
+- The [Canvas Calendar feed guide](https://community.instructure.com/en/kb/articles/662804-unknown) says the export contains only the previous 30 days and next 366 days, is capped at 1,000 items, excludes To Do items, and can require re-import after a new course enrollment. It does not state that an omitted UID means deletion.
+- The [Canvas upstream feed implementation at the reviewed revision](https://github.com/instructure/canvas-lms/blob/1c9f0bb8013ed69c4f2efe11fd483025469b7e6c/app/controllers/calendar_events_api_controller.rb#L1157-L1275) applies the same moving time window and per-query limit before serializing `METHOD:PUBLISH`. It exposes no completeness, truncation, generation, or deletion-tombstone marker. The institution deployment version and customizations are not established by this upstream source.
+- [RFC 5545 section 3.6](https://www.rfc-editor.org/rfc/rfc5545.html#section-3.6) allows an iCalendar object to carry one or more components; the file format alone does not prove a complete provider snapshot. [RFC 5546](https://www.rfc-editor.org/rfc/rfc5546.html#section-3.2.1) defines `PUBLISH` separately from explicit cancellation, so absence from a published feed is not itself a deletion signal.
+- [RFC 9110 section 15.4.5](https://www.rfc-editor.org/rfc/rfc9110.html#name-304-not-modified) defines `304 Not Modified` as reuse of the stored representation. It has no response content and must never be treated as an empty snapshot.
+
+Actual observation:
+
+- The redacted real-feed QA observed one supported calendar item classified as an Assignment and then a conditional 304 with stable identities. No deletion or omission transition was observed, and user data was not deliberately removed for testing.
+- Stable repeated responses demonstrate conditional caching and idempotency only. They do not prove completeness or define the meaning of a missing item.
+
+Code assumptions and fail-closed policy:
+
+- `sync_generation` is a counter for successfully applied HTTP 200 representations, not proof of an authoritative generation.
+- A 304 reuses the stored representation and may refresh ETag or Last-Modified metadata supplied by the response; an omitted validator is preserved. It does not advance generation, apply a snapshot, emit a data-change event, or run reconciliation. Validator string equality is not treated as a protocol invariant.
+- Structural parse failure applies nothing. Item-level unsupported values, duplicate conflicts, ignored auxiliary components, and apply-stage warnings make a response ineligible for any future missing-item reconciliation.
+- Missing-item reconciliation may only be considered after all four gates are independently true: successful fetch with representation content, complete parse/apply without partial-processing signals, provider authority confirmed by an applicable official contract, and an explicit local enablement decision. The authority gate is currently false, so the database flag alone cannot authorize deletion.
+- Explicit provider cancellation and same-UID type reclassification remain separate update signals. Mere absence never tombstones Event, Assignment, recurring rule, exception, Course, or manual data.
+
 ## Mascot motion
 
 Danwoong behavior:

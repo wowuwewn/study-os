@@ -8,7 +8,8 @@ This document is the handoff snapshot for continuing Study OS in a new Codex cha
 - Application identifier: `com.wowuwewn.studyos`.
 - Latest completed iCal baseline before Calendar v0.1: `7067bdc` (`iCal 동기화 상태 UX 마무리`).
 - iCal Sync/Dedup v0.1, Calendar v0.1, auxiliary-window visibility UX, Decision Engine v1, Last Safe Start v0.1, Week v0.1, Tasks v0.1, and Focus Stats v0.1 are complete.
-- M00 stabilization is complete as of 2026-09-18: the existing uncommitted feature set builds, all package `test:*` scripts and Rust checks pass, migration 007 is covered by the data validator, and the relevant flows were rerun in the actual Windows Tauri application. No commit or push has been performed.
+- M00 stabilization is complete and committed as `7d55d08`.
+- M01 iCal authority and missing-item safety verification is complete in the current uncommitted worktree as of 2026-09-18: the reviewed official contract does not establish an authoritative full snapshot, missing-item reconciliation remains disabled, and the fail-closed behavior is covered by automated and actual Windows QA. Do not commit or push this M01 work until it is reviewed.
 - Do not commit secrets or personal schedule URLs/data. Local databases and personal semester JSON files are ignored.
 
 ## Completed functionality
@@ -41,7 +42,9 @@ This document is the handoff snapshot for continuing Study OS in a new Codex cha
   - normalized data is applied atomically to Source, Event, Assignment, RecurringScheduleRule, and recurring exceptions with stable UID hashes and a global external identity ledger;
   - deterministic Canvas evidence is required for Assignment; uncertain VEVENT values remain Event;
   - recurring occurrences are not materialized as Event rows, stale revisions cannot overwrite newer ones, and canonical manual recurring rules are linked without provider mutation;
-  - feed absence does not delete rows because authoritative-full-snapshot behavior is still unverified; generation tracking and the disabled reconciliation flag prepare that later step;
+  - feed absence does not delete rows. The reviewed official Canvas guide and upstream implementation describe a moving 30-day-past/366-day-future window, item caps, and exclusions but no completeness, truncation, generation, or absence-as-deletion contract, so authoritative-full-snapshot status is `UNVERIFIED` and reconciliation remains disabled;
+  - `sync_generation` counts successfully applied HTTP 200 representations; it does not certify snapshot authority or completeness. A 304 reuses the prior representation, may refresh response-supplied ETag/Last-Modified metadata while preserving omitted validators, does not advance generation, and never runs missing-item reconciliation;
+  - structural parse failures apply nothing, while unsupported/partial/warning-bearing representations never make absent provider items eligible for deletion. The database enablement flag alone is insufficient without independently confirmed fetch, parse/apply completeness, and provider authority;
   - a successful changed sync emits `study-os-data-changed` once. A conditional 304 updates sync success without emitting a data-change event.
   - parsing is tolerant at the item boundary: standard auxiliary components and optional/unknown properties do not reject the feed, while unsupported DTSTART/DTEND/DUE/RRULE/RECURRENCE-ID semantics skip only the affected item and increment redacted reason counts;
   - diagnostics expose only allowlisted component/property names, DATE/date-time counts, recurrence-shape buckets, and fixed reason codes; provider values are never returned or logged;
@@ -215,13 +218,13 @@ cargo clippy --all-targets -- -D warnings
 - `test:schedule`: semester import, import idempotency, weekday and semester bounds, Event merge order, timezone boundary, invalid input, and exception behavior.
 - `test:schedule` also covers the canonical 2026-2 shape: 7 Courses, 11 weekly rules, seed Course reuse without metadata loss, existing Semester date preservation, idempotent re-import, and canonical Monday occurrences.
 - `npm run qa:schedule-import` reads ignored `semester.local.json`, invokes the existing import service inside a running Windows Tauri app through WebView2 CDP, imports twice, and verifies counts, stable IDs, zero Event materialization, current-day Today output, and canonical Monday occurrences.
-- `test:ical`: migrations and date guards plus Rust endpoint, parsing, classification, recurrence, cancellation tombstone, stale-sequence, cross-kind transition, atomicity, idempotency, no-missing-delete, and manual-rule reuse tests against redacted synthetic data.
+- `test:ical`: migrations and date guards plus Rust endpoint, parsing, classification, recurrence, explicit cancellation, stale-sequence, cross-kind transition, atomicity, idempotency, manual-rule reuse, 304 generation/state preservation, and fail-closed empty/partial/structural-failure cases against redacted synthetic data.
 - `test:calendar`: month-grid and six-row layout data, local month bounds, Assignment DATE/date-time filtering, recurring/Quick Add/iCal Event/Assignment read-model separation and sort, and multi-day DATE coverage.
 - `test:decision`: urgency/fit/oversize scoring, running and paused focus locks, hysteresis, deterministic ties, virtual Assignment candidates and lazy creation, prepare-next-event, DATE-only timezone semantics, priority explanations, and Last Safe Start including missing-input cases.
 - `test:visibility`: absent/invalid visibility defaults, strict boolean parsing, independent preference updates, and safe PIP mode parsing.
 - `test:milestone`: Monday/local-week boundaries, Week data merge and linked dedup, Tasks grouping and recommendation reuse, running elapsed, pause exclusion, unique session counts, and cross-midnight local-day splitting.
 - `npm run qa:ical`: actual Windows Tauri and Credential Manager connect/status/disconnect QA, connected and disconnected Settings states, SQLite secret absence, and cleanup verification. It deliberately does not perform network sync without the user's private feed URL.
-- `npm run qa:ical:real`: uses only the existing Credential Manager entry, performs real Sync Now and repeated sync, and reports only redacted aggregate diagnostics while asserting stable identities, canonical 7-course/11-rule preservation, Today refresh, and unchanged Focus state.
+- `npm run qa:ical:real`: uses only the existing Credential Manager entry, performs real Sync Now and repeated sync, and reports only redacted aggregate diagnostics while asserting stable identities, canonical 7-course/11-rule preservation, Today refresh, unchanged Focus and manual domain state, disabled reconciliation, and unchanged generation/provider state on 304.
 - `npm run qa:calendar`: actual Windows Calendar window, range-service data, actual Semester recurrence, temporary one-off Event refresh, actual iCal Assignment due-month inclusion, provider identity non-rendering, Focus state, and one temporary visual capture. It removes its temporary Event; delete `qa/.tmp/` after visual inspection.
 - `npm run qa:windows`: actual Main/PIP/Pet regression for shared quest state, Compact/Expanded sizing, Pet transition, and unchanged Focus state.
 - `npm run qa:decision`: state-restoring actual Windows QA for matching Main/PIP recommendations, actual PIP Start plus focus lifecycle, recommendation explanations, hidden raw scores, Last Safe Start, prepare-next-event, Quick Add, Calendar, and iCal status.
@@ -230,12 +233,13 @@ cargo clippy --all-targets -- -D warnings
 - `scripts/qa-quick-add-live.mjs` is an actual-app CDP QA helper, not an npm test script. It expects a running dev app with WebView2 remote debugging.
 - `npm run clean` removes only allowlisted, reproducible build/cache/temp outputs. It does not remove source, migrations, docs, assets, or local application data.
 - The 2026-09-18 M00 pass reran build, every package `test:*` script, Rust test/check/fmt/clippy, and the relevant actual-Windows QA suites successfully. Local screenshots were checked for layout, overflow, overlap, and wrapping. Direct access to the approved Figma nodes was unavailable, so Figma direct comparison remains blocked rather than recorded as complete.
+- The 2026-09-18 M01 pass reran build, every package `test:*` script, full Rust test/check/fmt/clippy, real Credential Manager iCal sync/304 QA, and actual Main/PIP/Pet window regression successfully. It did not deliberately delete or modify user records and did not persist private URLs, credentials, or raw feed content.
 
 ## Not implemented yet
 
 - There is still no schedule import Settings UI or file picker; the completed actual timetable import uses the ignored local file plus the development live-import helper.
 - Authenticated e-Campus detail enrichment, login/scraping, and background synchronization are not implemented.
-- Missing-item deletion reconciliation remains deliberately disabled until the official feed is verified as an authoritative full snapshot. Cross-provider semantic dedup beyond exact recurring-rule reuse is not implemented.
+- Missing-item deletion reconciliation remains deliberately disabled because the reviewed official semantics do not establish an authoritative full snapshot. Enabling it requires a new applicable provider contract or equivalent authoritative signal plus complete parse/apply evidence and an explicit local enablement decision. Cross-provider semantic dedup beyond exact recurring-rule reuse is not implemented.
 - Notes is not implemented; its Main tab currently shows a restrained out-of-scope placeholder.
 - Main memo is not persisted.
 - Main search and Today-row completion controls remain presentation-only; task completion/cancellation is currently handled from Tasks, with active-focus lifecycle actions available through the focus surfaces.
@@ -245,8 +249,8 @@ cargo clippy --all-targets -- -D warnings
 
 ## Next priorities
 
-1. Verify whether the feed is authoritative before enabling generation-based missing-item reconciliation.
-2. Add authenticated e-Campus detail enrichment only for fields that iCal cannot provide.
-3. Perform Windows polish and release-oriented QA.
-4. Replace the Pet placeholder with the final Danwoong animation while preserving the existing state/event contract.
-5. Add Notes only when it is separately prioritized.
+1. Add authenticated e-Campus detail enrichment only for fields that iCal cannot provide, after separately approving its credential and data-handling scope.
+2. Perform Windows polish and release-oriented QA.
+3. Replace the Pet placeholder with the final Danwoong animation while preserving the existing state/event contract.
+4. Add Notes only when it is separately prioritized.
+5. Revisit missing-item reconciliation only if a new applicable official provider contract or explicit authoritative signal becomes available; do not infer authority from successful syncs or generation counts.

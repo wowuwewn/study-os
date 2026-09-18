@@ -112,7 +112,10 @@ struct FetchCache {
 }
 
 enum FetchResult {
-    NotModified,
+    NotModified {
+        etag: Option<String>,
+        last_modified: Option<String>,
+    },
     Calendar {
         bytes: Vec<u8>,
         etag: Option<String>,
@@ -503,18 +506,6 @@ async fn fetch_calendar(url: &Url, cache: &FetchCache) -> Result<FetchResult, Sy
         request = request.header(header::IF_MODIFIED_SINCE, value);
     }
     let response = request.send().await.map_err(|_| SyncError::Network)?;
-    if response.status() == StatusCode::NOT_MODIFIED {
-        return Ok(FetchResult::NotModified);
-    }
-    if !response.status().is_success() {
-        return Err(SyncError::Http);
-    }
-    if response
-        .content_length()
-        .is_some_and(|size| size as usize > MAX_RESPONSE_BYTES)
-    {
-        return Err(SyncError::ResponseTooLarge);
-    }
     let etag = response
         .headers()
         .get(header::ETAG)
@@ -525,6 +516,21 @@ async fn fetch_calendar(url: &Url, cache: &FetchCache) -> Result<FetchResult, Sy
         .get(header::LAST_MODIFIED)
         .and_then(|value| value.to_str().ok())
         .map(str::to_owned);
+    if response.status() == StatusCode::NOT_MODIFIED {
+        return Ok(FetchResult::NotModified {
+            etag,
+            last_modified,
+        });
+    }
+    if !response.status().is_success() {
+        return Err(SyncError::Http);
+    }
+    if response
+        .content_length()
+        .is_some_and(|size| size as usize > MAX_RESPONSE_BYTES)
+    {
+        return Err(SyncError::ResponseTooLarge);
+    }
     let mut stream = response.bytes_stream();
     let mut bytes = Vec::new();
     while let Some(chunk) = stream.next().await {
@@ -569,7 +575,10 @@ pub async fn sync_ical(
     let cache = update_attempt(&pool).await.map_err(|error| error.code())?;
     let result = async {
         match fetch_calendar(&url, &cache).await? {
-            FetchResult::NotModified => finish_not_modified(&pool).await,
+            FetchResult::NotModified {
+                etag,
+                last_modified,
+            } => finish_not_modified(&pool, etag, last_modified).await,
             FetchResult::Calendar {
                 bytes,
                 etag,
@@ -592,13 +601,20 @@ pub async fn sync_ical(
     result.map_err(|error| error.code())
 }
 
-async fn finish_not_modified(pool: &SqlitePool) -> Result<IcalSyncResult, SyncError> {
+async fn finish_not_modified(
+    pool: &SqlitePool,
+    etag: Option<String>,
+    last_modified: Option<String>,
+) -> Result<IcalSyncResult, SyncError> {
     let now = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
     sqlx::query(
         "UPDATE source_sync_states SET status='ok', last_success_at=?1, last_error_code=NULL, \
-         consecutive_failures=0, updated_at=?1 WHERE source_id=?2",
+         consecutive_failures=0, etag=COALESCE(?2, etag), \
+         last_modified=COALESCE(?3, last_modified), updated_at=?1 WHERE source_id=?4",
     )
     .bind(now)
+    .bind(etag)
+    .bind(last_modified)
     .bind(SOURCE_ID)
     .execute(pool)
     .await
@@ -1966,8 +1982,9 @@ async fn apply_snapshot(
         }
     }
 
-    // The schema tracks generations for a future authoritative reconciliation pass.
-    // v0.1 deliberately never tombstones an item merely because it is absent.
+    // sync_generation counts successfully applied 200 responses. It is not evidence that
+    // the bounded provider feed was complete or authoritative. Missing-item reconciliation
+    // therefore remains fail-closed and never tombstones an item merely because it is absent.
     sqlx::query(
         "UPDATE source_sync_states SET status='ok', sync_generation=?1, etag=?2, last_modified=?3, \
          last_success_at=?4, last_error_code=NULL, consecutive_failures=0, updated_at=?4 WHERE source_id=?5",
@@ -2352,6 +2369,220 @@ mod tests {
             assignments_after, 2,
             "absence must not delete before feed authority is verified"
         );
+    }
+
+    #[tokio::test]
+    async fn not_modified_preserves_representation_and_refreshes_response_metadata() {
+        let pool = memory_pool().await;
+        let first = apply_snapshot(
+            &pool,
+            parse_calendar(SYNTHETIC.as_bytes()).unwrap(),
+            Some("\"synthetic-etag\"".into()),
+            Some("Thu, 17 Sep 2026 00:00:00 GMT".into()),
+        )
+        .await
+        .unwrap();
+        let before_sync: (i64, Option<String>, Option<String>) = sqlx::query_as(
+            "SELECT sync_generation, etag, last_modified FROM source_sync_states WHERE source_id=?1",
+        )
+        .bind(SOURCE_ID)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        let before_ledger: Vec<(String, String, i64, i64, Option<String>)> = sqlx::query_as(
+            "SELECT external_id, entity_kind, last_seen_generation, explicitly_cancelled, removed_at \
+             FROM external_sync_items WHERE source_id=?1 ORDER BY external_id",
+        )
+        .bind(SOURCE_ID)
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        let before_entities: (i64, i64, i64) = (
+            sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE source_id=?1 AND source_removed_at IS NULL")
+                .bind(SOURCE_ID).fetch_one(&pool).await.unwrap(),
+            sqlx::query_scalar("SELECT COUNT(*) FROM assignments WHERE source_id=?1 AND source_removed_at IS NULL")
+                .bind(SOURCE_ID).fetch_one(&pool).await.unwrap(),
+            sqlx::query_scalar("SELECT COUNT(*) FROM recurring_schedule_rules WHERE source_id=?1 AND source_removed_at IS NULL")
+                .bind(SOURCE_ID).fetch_one(&pool).await.unwrap(),
+        );
+
+        let response_etag = "\"synthetic-etag\"";
+        let refreshed_last_modified = "Fri, 18 Sep 2026 00:00:00 GMT";
+        let result = finish_not_modified(
+            &pool,
+            Some(response_etag.into()),
+            Some(refreshed_last_modified.into()),
+        )
+        .await
+        .unwrap();
+        let after_sync: (i64, Option<String>, Option<String>) = sqlx::query_as(
+            "SELECT sync_generation, etag, last_modified FROM source_sync_states WHERE source_id=?1",
+        )
+        .bind(SOURCE_ID)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        let after_ledger: Vec<(String, String, i64, i64, Option<String>)> = sqlx::query_as(
+            "SELECT external_id, entity_kind, last_seen_generation, explicitly_cancelled, removed_at \
+             FROM external_sync_items WHERE source_id=?1 ORDER BY external_id",
+        )
+        .bind(SOURCE_ID)
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        let after_entities: (i64, i64, i64) = (
+            sqlx::query_scalar("SELECT COUNT(*) FROM events WHERE source_id=?1 AND source_removed_at IS NULL")
+                .bind(SOURCE_ID).fetch_one(&pool).await.unwrap(),
+            sqlx::query_scalar("SELECT COUNT(*) FROM assignments WHERE source_id=?1 AND source_removed_at IS NULL")
+                .bind(SOURCE_ID).fetch_one(&pool).await.unwrap(),
+            sqlx::query_scalar("SELECT COUNT(*) FROM recurring_schedule_rules WHERE source_id=?1 AND source_removed_at IS NULL")
+                .bind(SOURCE_ID).fetch_one(&pool).await.unwrap(),
+        );
+
+        assert!(result.not_modified);
+        assert_eq!(result.generation, first.generation);
+        assert_eq!(
+            (result.inserted, result.updated, result.unchanged),
+            (0, 0, 0)
+        );
+        assert_eq!(
+            after_sync.0, before_sync.0,
+            "304 must not advance the cached snapshot generation"
+        );
+        assert_eq!(
+            (after_sync.1.as_deref(), after_sync.2.as_deref()),
+            (Some(response_etag), Some(refreshed_last_modified)),
+            "304 response metadata may refresh the stored validators"
+        );
+        assert_eq!(
+            after_ledger, before_ledger,
+            "304 must not mark provider identities seen or missing"
+        );
+        assert_eq!(
+            after_entities, before_entities,
+            "304 must not mutate provider entities"
+        );
+
+        finish_not_modified(&pool, None, None).await.unwrap();
+        let after_absent_validators: (i64, Option<String>, Option<String>) = sqlx::query_as(
+            "SELECT sync_generation, etag, last_modified FROM source_sync_states WHERE source_id=?1",
+        )
+        .bind(SOURCE_ID)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            after_absent_validators, after_sync,
+            "validators absent from a later 304 must preserve stored metadata and generation"
+        );
+    }
+
+    #[tokio::test]
+    async fn authority_flag_and_partial_or_empty_snapshots_never_reconcile_missing() {
+        let pool = memory_pool().await;
+        let initial = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:kept-a\r\nDTSTART:20260914T010000Z\r\nSUMMARY:Kept A\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:kept-b\r\nDTSTART:20260914T020000Z\r\nSUMMARY:Kept B\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+        apply_snapshot(
+            &pool,
+            parse_calendar(initial.as_bytes()).unwrap(),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        sqlx::query(
+            "UPDATE source_sync_states SET missing_reconciliation_enabled=1 WHERE source_id=?1",
+        )
+        .bind(SOURCE_ID)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let empty = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nEND:VCALENDAR\r\n";
+        let empty_result =
+            apply_snapshot(&pool, parse_calendar(empty.as_bytes()).unwrap(), None, None)
+                .await
+                .unwrap();
+        assert_eq!(empty_result.diagnostics.unsupported, 0);
+        let active_after_empty: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM events WHERE source_id=?1 AND source_removed_at IS NULL",
+        )
+        .bind(SOURCE_ID)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            active_after_empty, 2,
+            "a complete parse and DB flag are insufficient without verified authority"
+        );
+
+        let partial = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:kept-a\r\nDTSTART:20260914T010000Z\r\nSUMMARY:Updated A\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:unsupported-c\r\nSUMMARY:Missing DTSTART\r\nEND:VEVENT\r\nBEGIN:X-HARMLESS\r\nX-PRIVATE-VALUE:redacted\r\nEND:X-HARMLESS\r\nEND:VCALENDAR\r\n";
+        let partial_snapshot = parse_calendar(partial.as_bytes()).unwrap();
+        assert_eq!(partial_snapshot.diagnostics.unsupported, 1);
+        assert_eq!(
+            partial_snapshot
+                .diagnostics
+                .unsupported_reasons
+                .get("auxiliary_component_ignored"),
+            Some(&1)
+        );
+        apply_snapshot(&pool, partial_snapshot, None, None)
+            .await
+            .unwrap();
+        let kept_b: (Option<String>, i64, Option<String>) = sqlx::query_as(
+            "SELECT e.source_removed_at, x.last_seen_generation, x.removed_at \
+             FROM events e JOIN external_sync_items x ON x.event_id=e.id \
+             WHERE e.source_id=?1 AND e.title='Kept B'",
+        )
+        .bind(SOURCE_ID)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            kept_b,
+            (None, 1, None),
+            "unsupported or warning-bearing responses must not treat absence as deletion"
+        );
+    }
+
+    #[tokio::test]
+    async fn structural_parse_failure_preserves_database_and_generation() {
+        let pool = memory_pool().await;
+        apply_snapshot(
+            &pool,
+            parse_calendar(SYNTHETIC.as_bytes()).unwrap(),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        let before_generation: i64 =
+            sqlx::query_scalar("SELECT sync_generation FROM source_sync_states WHERE source_id=?1")
+                .bind(SOURCE_ID)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        let before_ledger: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM external_sync_items WHERE source_id=?1")
+                .bind(SOURCE_ID)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        let malformed = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:broken\r\nDTSTART:20260914T010000Z\r\nEND:VCALENDAR\r\n";
+        assert!(parse_calendar(malformed.as_bytes()).is_err());
+        let after_generation: i64 =
+            sqlx::query_scalar("SELECT sync_generation FROM source_sync_states WHERE source_id=?1")
+                .bind(SOURCE_ID)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        let after_ledger: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM external_sync_items WHERE source_id=?1")
+                .bind(SOURCE_ID)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(after_generation, before_generation);
+        assert_eq!(after_ledger, before_ledger);
     }
 
     #[tokio::test]
