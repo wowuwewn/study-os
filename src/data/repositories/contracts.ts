@@ -1,6 +1,7 @@
 import type {
   Assignment,
   Course,
+  FocusInterval,
   FocusSession,
   RecurringScheduleException,
   RecurringScheduleRule,
@@ -79,9 +80,11 @@ export interface AssignmentRepository {
 }
 
 export interface StudyTaskRepository {
+  list(): Promise<StudyTask[]>;
   listOpen(): Promise<StudyTask[]>;
   get(id: string): Promise<StudyTask | null>;
-  getCurrentQuest(): Promise<StudyTask | null>;
+  findExecutableByAssignment(assignmentId: string): Promise<StudyTask | null>;
+  createExecutableForAssignment(input: StudyTaskInput): Promise<StudyTask>;
   save(input: StudyTaskInput): Promise<StudyTask>;
   setStatus(id: string, status: StudyTaskStatus): Promise<void>;
   remove(id: string): Promise<void>;
@@ -89,12 +92,18 @@ export interface StudyTaskRepository {
   setStepCompleted(stepId: string, isCompleted: boolean): Promise<void>;
 }
 
+export interface DecisionStateRepository {
+  getCurrentCandidateId(): Promise<string | null>;
+  setCurrentCandidateId(candidateId: string | null): Promise<void>;
+}
+
 export interface FocusSessionRepository {
   getActive(): Promise<FocusSession | null>;
+  listIntervalsBetween(startAt: string, endAt: string): Promise<FocusInterval[]>;
   startOrResume(task: StudyTask, elapsedSeconds?: number): Promise<FocusSession>;
-  pause(sessionId: string, taskId: string | null, elapsedSeconds: number): Promise<FocusSession>;
-  resume(sessionId: string, taskId: string | null): Promise<FocusSession>;
+  pause(sessionId: string, elapsedSeconds: number): Promise<FocusSession>;
+  resume(sessionId: string): Promise<FocusSession>;
   saveElapsed(sessionId: string, elapsedSeconds: number): Promise<void>;
-  complete(sessionId: string, taskId: string | null, elapsedSeconds: number): Promise<FocusSession>;
+  complete(sessionId: string, elapsedSeconds: number): Promise<FocusSession>;
   cancel(sessionId: string, elapsedSeconds: number): Promise<FocusSession>;
 }

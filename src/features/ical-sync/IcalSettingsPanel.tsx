@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { listen } from "@tauri-apps/api/event";
 import {
   connectIcal,
   disconnectIcal,
@@ -7,6 +8,13 @@ import {
   syncIcal,
 } from "./service";
 import type { IcalConnectionStatus, IcalSyncResult } from "./types";
+import {
+  AUXILIARY_VISIBILITY_CHANGED_EVENT,
+  getAuxiliaryWindowVisibility,
+  setAuxiliaryWindowVisibility,
+  type AuxiliaryVisibility,
+  type AuxiliaryWindow,
+} from "../../windowVisibility";
 
 type Props = { onClose: () => void };
 
@@ -24,6 +32,8 @@ export default function IcalSettingsPanel({ onClose }: Props) {
   const [busy, setBusy] = useState(false);
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [result, setResult] = useState<IcalSyncResult | null>(null);
+  const [visibility, setVisibility] = useState<AuxiliaryVisibility>({ pip: false, calendar: false });
+  const [visibilityBusy, setVisibilityBusy] = useState<AuxiliaryWindow | null>(null);
 
   const reload = useCallback(async () => {
     try {
@@ -38,6 +48,24 @@ export default function IcalSettingsPanel({ onClose }: Props) {
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  useEffect(() => {
+    let cleanup: (() => void) | undefined;
+    let cancelled = false;
+    void getAuxiliaryWindowVisibility().then((next) => {
+      if (!cancelled) setVisibility(next);
+    });
+    void listen<AuxiliaryVisibility>(AUXILIARY_VISIBILITY_CHANGED_EVENT, (event) => {
+      setVisibility(event.payload);
+    }).then((unlisten) => {
+      if (cancelled) unlisten();
+      else cleanup = unlisten;
+    });
+    return () => {
+      cancelled = true;
+      cleanup?.();
+    };
+  }, []);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -90,6 +118,18 @@ export default function IcalSettingsPanel({ onClose }: Props) {
     });
   };
 
+  const toggleAuxiliaryWindow = (windowName: AuxiliaryWindow) => {
+    const visible = !visibility[windowName];
+    setVisibilityBusy(windowName);
+    setVisibility((current) => ({ ...current, [windowName]: visible }));
+    void setAuxiliaryWindowVisibility(windowName, visible)
+      .catch((reason) => {
+        console.error(`Failed to update ${windowName} visibility`, reason);
+        return getAuxiliaryWindowVisibility().then(setVisibility);
+      })
+      .finally(() => setVisibilityBusy(null));
+  };
+
   const statusLabel = status?.connected
     ? status.status === "ok"
       ? "연결됨 · 정상"
@@ -116,6 +156,32 @@ export default function IcalSettingsPanel({ onClose }: Props) {
           <span className={status?.connected ? "status-dot status-dot--connected" : "status-dot"} aria-hidden="true" />
           <div><strong>{statusLabel}</strong><small>마지막 성공 {formatLastSync(status?.lastSuccessAt ?? null)}</small></div>
         </div>
+
+        <section className="ical-settings__windows" aria-labelledby="auxiliary-windows-heading">
+          <h3 id="auxiliary-windows-heading">보조창</h3>
+          <div>
+            <span><strong>PIP</strong><small>현재 퀘스트와 집중 상태</small></span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={visibility.pip}
+              aria-label="PIP 표시"
+              disabled={visibilityBusy === "pip"}
+              onClick={() => toggleAuxiliaryWindow("pip")}
+            ><i aria-hidden="true" /></button>
+          </div>
+          <div>
+            <span><strong>Calendar</strong><small>월간 일정과 마감</small></span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={visibility.calendar}
+              aria-label="Calendar 표시"
+              disabled={visibilityBusy === "calendar"}
+              onClick={() => toggleAuxiliaryWindow("calendar")}
+            ><i aria-hidden="true" /></button>
+          </div>
+        </section>
 
         {!status?.connected ? (
           <form onSubmit={handleConnect}>

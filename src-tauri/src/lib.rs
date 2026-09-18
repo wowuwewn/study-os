@@ -53,6 +53,18 @@ pub fn run() {
             sql: include_str!("../migrations/005_ical_adapter_version.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 6,
+            description: "focus_intervals",
+            sql: include_str!("../migrations/006_focus_intervals.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 7,
+            description: "atomic_focus_lifecycle",
+            sql: include_str!("../migrations/007_atomic_focus_lifecycle.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()
@@ -96,6 +108,7 @@ pub fn run() {
                     .always_on_top(true)
                     .transparent(true)
                     .shadow(true)
+                    .visible(false)
                     .center();
 
             #[cfg(target_os = "windows")]
@@ -182,8 +195,6 @@ pub fn run() {
             } else {
                 calendar_window.center()?;
             }
-            calendar_window.show()?;
-
             WebviewWindowBuilder::new(
                 app,
                 QUICK_ADD_WINDOW_LABEL,

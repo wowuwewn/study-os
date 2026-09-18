@@ -35,5 +35,13 @@ export function useStudyDashboard(options?: { recoverRunningSessions?: boolean }
     };
   }, [reload]);
 
+  useEffect(() => {
+    const nextAt = dashboard?.currentQuest?.nextRecalculationAt;
+    if (!nextAt || dashboard?.activeFocusSession) return;
+    const delay = Math.max(250, Date.parse(nextAt) - Date.now());
+    const timer = window.setTimeout(() => void reload(), delay);
+    return () => window.clearTimeout(timer);
+  }, [dashboard, reload]);
+
   return { dashboard, error, reload };
 }

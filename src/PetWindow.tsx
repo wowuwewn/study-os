@@ -13,6 +13,7 @@ import {
   type PetSnapshot,
   type PetState,
 } from "./pipState";
+import { setAuxiliaryWindowVisibility } from "./windowVisibility";
 
 const SINGLE_CLICK_DELAY = 280;
 const DRAG_THRESHOLD = 4;
@@ -80,6 +81,22 @@ export default function PetWindow() {
     return () => {
       cleanup?.();
       if (singleClickTimer.current) window.clearTimeout(singleClickTimer.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    let cleanup: (() => void) | undefined;
+    let cancelled = false;
+    void getCurrentWindow().onCloseRequested((event) => {
+      event.preventDefault();
+      void setAuxiliaryWindowVisibility("pip", false);
+    }).then((unlisten) => {
+      if (cancelled) unlisten();
+      else cleanup = unlisten;
+    });
+    return () => {
+      cancelled = true;
+      cleanup?.();
     };
   }, []);
 

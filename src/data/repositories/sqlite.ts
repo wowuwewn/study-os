@@ -2,6 +2,7 @@ import type Database from "@tauri-apps/plugin-sql";
 import type {
   Assignment,
   Course,
+  FocusInterval,
   FocusSession,
   RecurringScheduleException,
   RecurringScheduleRule,
@@ -46,6 +47,7 @@ import type {
   AssignmentRepository,
   CourseInput,
   CourseRepository,
+  DecisionStateRepository,
   EventInput,
   EventRepository,
   FocusSessionRepository,
@@ -450,6 +452,16 @@ export class SqliteStudyTaskRepository implements StudyTaskRepository {
     return mapStudyTask(row, await this.listSteps(row.id));
   }
 
+  async list(): Promise<StudyTask[]> {
+    const database = await getDatabase();
+    const rows = await database.select<StudyTaskRow[]>(
+      `SELECT * FROM study_tasks
+       ORDER BY CASE status WHEN 'doing' THEN 0 WHEN 'paused' THEN 1 WHEN 'todo' THEN 2 ELSE 3 END,
+        priority DESC, due_at IS NULL, due_at, created_at`,
+    );
+    return Promise.all(rows.map((row) => this.withSteps(row)));
+  }
+
   async listOpen(): Promise<StudyTask[]> {
     const database = await getDatabase();
     const rows = await database.select<StudyTaskRow[]>(
@@ -466,25 +478,51 @@ export class SqliteStudyTaskRepository implements StudyTaskRepository {
     return row ? this.withSteps(row) : null;
   }
 
-  async getCurrentQuest(): Promise<StudyTask | null> {
+  async findExecutableByAssignment(assignmentId: string): Promise<StudyTask | null> {
     const database = await getDatabase();
     const row = await first<StudyTaskRow>(
       database,
-      `SELECT task.*
-       FROM study_tasks task
-       LEFT JOIN focus_sessions focus
-         ON focus.task_id = task.id AND focus.status IN ('running', 'paused')
-       WHERE task.status IN ('todo', 'doing', 'paused')
-       ORDER BY CASE
-         WHEN focus.status = 'running' THEN 0
-         WHEN focus.status = 'paused' THEN 1
-         WHEN task.status = 'doing' THEN 2
-         ELSE 3
-       END,
-       task.priority DESC, task.due_at IS NULL, task.due_at, task.created_at
+      `SELECT * FROM study_tasks
+       WHERE assignment_id = ?1 AND status IN ('todo', 'doing', 'paused')
+       ORDER BY created_at, id
        LIMIT 1`,
+      [assignmentId],
     );
     return row ? this.withSteps(row) : null;
+  }
+
+  async createExecutableForAssignment(input: StudyTaskInput): Promise<StudyTask> {
+    if (!input.assignmentId) throw new Error("Assignment task creation requires an assignment id");
+    const database = await getDatabase();
+    const id = input.id ?? createEntityId();
+    const now = utcNow();
+    await database.execute(
+      `INSERT INTO study_tasks
+        (id, source_id, course_id, assignment_id, title, notes, estimated_minutes, priority, status, due_at, planned_start_at, completed_at, created_at, updated_at)
+       SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?13
+       WHERE NOT EXISTS (
+         SELECT 1 FROM study_tasks
+         WHERE assignment_id = ?4 AND status IN ('todo', 'doing', 'paused')
+       )`,
+      [
+        id,
+        input.sourceId,
+        input.courseId,
+        input.assignmentId,
+        input.title,
+        input.notes,
+        input.estimatedMinutes,
+        input.priority,
+        input.status,
+        input.dueAt,
+        input.plannedStartAt,
+        input.completedAt,
+        now,
+      ],
+    );
+    const task = await this.findExecutableByAssignment(input.assignmentId);
+    if (!task) throw new Error("Assignment task creation failed");
+    return task;
   }
 
   async save(input: StudyTaskInput): Promise<StudyTask> {
@@ -557,6 +595,34 @@ export class SqliteStudyTaskRepository implements StudyTaskRepository {
   }
 }
 
+const DECISION_CURRENT_CANDIDATE_KEY = "decision_engine_current_candidate_v1";
+
+export class SqliteDecisionStateRepository implements DecisionStateRepository {
+  async getCurrentCandidateId(): Promise<string | null> {
+    const database = await getDatabase();
+    const row = await first<{ value: string }>(
+      database,
+      "SELECT value FROM app_meta WHERE key = ?1",
+      [DECISION_CURRENT_CANDIDATE_KEY],
+    );
+    return row?.value || null;
+  }
+
+  async setCurrentCandidateId(candidateId: string | null): Promise<void> {
+    const database = await getDatabase();
+    if (!candidateId) {
+      await database.execute("DELETE FROM app_meta WHERE key = ?1", [DECISION_CURRENT_CANDIDATE_KEY]);
+      return;
+    }
+    const now = utcNow();
+    await database.execute(
+      `INSERT INTO app_meta (key, value, updated_at) VALUES (?1, ?2, ?3)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+      [DECISION_CURRENT_CANDIDATE_KEY, candidateId, now],
+    );
+  }
+}
+
 export class SqliteFocusSessionRepository implements FocusSessionRepository {
   async getById(id: string): Promise<FocusSession | null> {
     const database = await getDatabase();
@@ -576,13 +642,39 @@ export class SqliteFocusSessionRepository implements FocusSessionRepository {
     return row ? mapFocusSession(row) : null;
   }
 
+  async listIntervalsBetween(startAt: string, endAt: string): Promise<FocusInterval[]> {
+    const database = await getDatabase();
+    const rows = await database.select<Array<{
+      id: string;
+      session_id: string;
+      started_at: string;
+      ended_at: string | null;
+      session_status: FocusSession["status"];
+    }>>(
+      `SELECT i.id, i.session_id, i.started_at, i.ended_at, f.status AS session_status
+       FROM focus_intervals i
+       JOIN focus_sessions f ON f.id = i.session_id
+       WHERE i.started_at < ?2
+         AND COALESCE(i.ended_at, ?2) > ?1
+       ORDER BY i.started_at, i.id`,
+      [startAt, endAt],
+    );
+    return rows.map((row) => ({
+      id: row.id,
+      sessionId: row.session_id,
+      startedAt: row.started_at,
+      endedAt: row.ended_at,
+      sessionStatus: row.session_status,
+    }));
+  }
+
   async startOrResume(task: StudyTask, elapsedSeconds = 0): Promise<FocusSession> {
     const active = await this.getActive();
     if (active) {
       if (active.taskId !== task.id) {
         throw new Error("Another focus session is already active");
       }
-      if (active.status === "paused") return this.resume(active.id, task.id);
+      if (active.status === "paused") return this.resume(active.id);
       return active;
     }
 
@@ -595,40 +687,24 @@ export class SqliteFocusSessionRepository implements FocusSessionRepository {
        VALUES (?1, ?2, ?3, NULL, ?4, ?5, 'running', ?3, 0, ?3, ?3)`,
       [id, task.id, now, task.estimatedMinutes, elapsedSeconds],
     );
-    await database.execute(
-      "UPDATE study_tasks SET status = 'doing', updated_at = ?1 WHERE id = ?2",
-      [now, task.id],
-    );
     const session = await this.getById(id);
     if (!session) throw new Error("Focus session start failed");
     return session;
   }
 
-  async pause(sessionId: string, taskId: string | null, elapsedSeconds: number): Promise<FocusSession> {
+  async pause(sessionId: string, elapsedSeconds: number): Promise<FocusSession> {
     const database = await getDatabase();
     const now = utcNow();
     await database.execute(PAUSE_FOCUS_SESSION_SQL, [elapsedSeconds, now, sessionId]);
-    if (taskId) {
-      await database.execute(
-        "UPDATE study_tasks SET status = 'paused', updated_at = ?1 WHERE id = ?2",
-        [now, taskId],
-      );
-    }
     const session = await this.getById(sessionId);
     if (!session) throw new Error("Focus session pause failed");
     return session;
   }
 
-  async resume(sessionId: string, taskId: string | null): Promise<FocusSession> {
+  async resume(sessionId: string): Promise<FocusSession> {
     const database = await getDatabase();
     const now = utcNow();
     await database.execute(RESUME_FOCUS_SESSION_SQL, [now, sessionId]);
-    if (taskId) {
-      await database.execute(
-        "UPDATE study_tasks SET status = 'doing', updated_at = ?1 WHERE id = ?2",
-        [now, taskId],
-      );
-    }
     const session = await this.getById(sessionId);
     if (!session) throw new Error("Focus session resume failed");
     return session;
@@ -639,16 +715,10 @@ export class SqliteFocusSessionRepository implements FocusSessionRepository {
     await database.execute(SAVE_FOCUS_ELAPSED_SQL, [elapsedSeconds, utcNow(), sessionId]);
   }
 
-  async complete(sessionId: string, taskId: string | null, elapsedSeconds: number): Promise<FocusSession> {
+  async complete(sessionId: string, elapsedSeconds: number): Promise<FocusSession> {
     const database = await getDatabase();
     const now = utcNow();
     await database.execute(COMPLETE_FOCUS_SESSION_SQL, [elapsedSeconds, now, sessionId]);
-    if (taskId) {
-      await database.execute(
-        "UPDATE study_tasks SET status = 'done', completed_at = ?1, updated_at = ?1 WHERE id = ?2",
-        [now, taskId],
-      );
-    }
     const session = await this.getById(sessionId);
     if (!session) throw new Error("Focus session completion failed");
     return session;
@@ -659,7 +729,8 @@ export class SqliteFocusSessionRepository implements FocusSessionRepository {
     const now = utcNow();
     await database.execute(
       `UPDATE focus_sessions SET status = 'cancelled', elapsed_seconds = ?1,
-       ended_at = ?2, updated_at = ?2 WHERE id = ?3`,
+       ended_at = ?2, updated_at = ?2
+       WHERE id = ?3 AND status IN ('running', 'paused')`,
       [elapsedSeconds, now, sessionId],
     );
     const session = await this.getById(sessionId);

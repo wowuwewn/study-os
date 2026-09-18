@@ -43,8 +43,20 @@ const entries = await Promise.all(targets.map(async (target) => {
 }));
 const windows = Object.fromEntries(entries);
 assert.deepEqual(Object.keys(windows).sort(), ["calendar", "main", "pet", "pip", "quick-add"]);
+const savedVisibility = await windows.main.evaluate(`({
+  legacy: localStorage.getItem('study-os:auxiliary-visibility:v1'),
+  pip: localStorage.getItem('study-os:pip-visible:v1'),
+  calendar: localStorage.getItem('study-os:calendar-visible:v1'),
+  mode: localStorage.getItem('study-os:pip-mode:v1')
+})`);
 
 try {
+  await windows.main.evaluate("[...document.querySelectorAll('.main-tab')].find((node) => node.textContent === '오늘')?.click()");
+  await windows.main.evaluate(`(async () => {
+    const visibility = await import('/src/windowVisibility.ts');
+    await visibility.setAuxiliaryWindowVisibility('pip', true);
+  })()`);
+  await wait(250);
   const focusBefore = await windows.main.evaluate(`(async () => {
     const repositories = await import('/src/data/repositories/index.ts');
     return repositories.focusSessionRepository.getActive();
@@ -87,5 +99,20 @@ try {
   assert.deepEqual(focusAfter, focusBefore, "PIP/Pet mode QA must not mutate FocusSession state");
   console.log(JSON.stringify({ windows: Object.keys(windows).sort(), sharedQuest: true, expandedSize, compactSize, petState: true, focusSessionUnchanged: true }, null, 2));
 } finally {
+  try {
+    const legacy = savedVisibility.legacy ? JSON.parse(savedVisibility.legacy) : { pip: false };
+    const savedPip = savedVisibility.pip === "true" ? true : savedVisibility.pip === "false" ? false : legacy.pip === true;
+    await windows.main.evaluate(`(async () => {
+      const visibility = await import('/src/windowVisibility.ts');
+      await visibility.setAuxiliaryWindowVisibility('pip', ${savedPip});
+      const original = ${JSON.stringify(savedVisibility)};
+      for (const [key, value] of [
+        ['study-os:auxiliary-visibility:v1', original.legacy],
+        ['study-os:pip-visible:v1', original.pip],
+        ['study-os:calendar-visible:v1', original.calendar],
+        ['study-os:pip-mode:v1', original.mode],
+      ]) value === null ? localStorage.removeItem(key) : localStorage.setItem(key, value);
+    })()`);
+  } catch {}
   for (const [, session] of entries) session.close();
 }

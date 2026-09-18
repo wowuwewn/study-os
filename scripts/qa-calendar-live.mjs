@@ -49,9 +49,19 @@ const entries = await Promise.all(targets.map(async (target) => {
 }));
 const windows = Object.fromEntries(entries);
 assert.deepEqual(Object.keys(windows).sort(), ["calendar", "main", "pet", "pip", "quick-add"]);
+const savedVisibility = await windows.main.evaluate(`({
+  legacy: localStorage.getItem('study-os:auxiliary-visibility:v1'),
+  pip: localStorage.getItem('study-os:pip-visible:v1'),
+  calendar: localStorage.getItem('study-os:calendar-visible:v1')
+})`);
 
 let eventCreated = false;
 try {
+  await windows.main.evaluate(`(async () => {
+    const visibility = await import('/src/windowVisibility.ts');
+    await visibility.setAuxiliaryWindowVisibility('calendar', true);
+  })()`);
+  await wait(250);
   const focusBefore = await windows.main.evaluate(`(async () => {
     const repositories = await import('/src/data/repositories/index.ts');
     return repositories.focusSessionRepository.getActive();
@@ -175,11 +185,15 @@ try {
       .find((item) => item.getAttribute('aria-label')?.startsWith('2026-08-31'));
     const divider = document.querySelector('.calendar-upcoming');
     return {
+      view: {
+        year: Number(document.querySelector('.calendar-header > span')?.textContent),
+        month: Number(document.querySelector('.calendar-header h1')?.textContent?.replace('월', '')),
+      },
       isSixRows: grid?.classList.contains('calendar-dates--6-rows'),
       hasDividerGap: Boolean(lastDay && divider && lastDay.getBoundingClientRect().bottom <= divider.getBoundingClientRect().top - 8),
     };
   })()`);
-  assert.deepEqual(sixRowLayout, { isSixRows: true, hasDividerGap: true });
+  assert.deepEqual(sixRowLayout, { view: { year: 2026, month: 8 }, isSixRows: true, hasDividerGap: true });
 
   const focusAfter = await windows.main.evaluate(`(async () => {
     const repositories = await import('/src/data/repositories/index.ts');
@@ -210,5 +224,19 @@ try {
       })()`);
     } catch {}
   }
+  try {
+    const legacy = savedVisibility.legacy ? JSON.parse(savedVisibility.legacy) : { calendar: false };
+    const savedCalendar = savedVisibility.calendar === "true" ? true : savedVisibility.calendar === "false" ? false : legacy.calendar === true;
+    await windows.main.evaluate(`(async () => {
+      const visibility = await import('/src/windowVisibility.ts');
+      await visibility.setAuxiliaryWindowVisibility('calendar', ${savedCalendar});
+      const original = ${JSON.stringify(savedVisibility)};
+      for (const [key, value] of [
+        ['study-os:auxiliary-visibility:v1', original.legacy],
+        ['study-os:pip-visible:v1', original.pip],
+        ['study-os:calendar-visible:v1', original.calendar],
+      ]) value === null ? localStorage.removeItem(key) : localStorage.setItem(key, value);
+    })()`);
+  } catch {}
   for (const [, session] of entries) session.close();
 }

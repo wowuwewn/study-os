@@ -156,11 +156,86 @@ export type FocusSession = {
   updatedAt: IsoDateTime;
 };
 
+export type FocusInterval = {
+  id: EntityId;
+  sessionId: EntityId;
+  startedAt: IsoDateTime;
+  endedAt: IsoDateTime | null;
+  sessionStatus: FocusSessionStatus;
+};
+
 export type StudyDashboard = {
   timelineEvents: ScheduleOccurrence[];
-  currentQuest: StudyTask;
+  currentQuest: DecisionResult | null;
   todayTasks: StudyTask[];
   activeFocusSession: FocusSession | null;
+};
+
+export type DecisionCandidateKind = "task" | "assignment" | "prepare_next_event";
+
+export type DecisionReasonCode =
+  | "focus_lock_running"
+  | "focus_lock_paused"
+  | "prepare_next_event"
+  | "overdue"
+  | "due_within_6h"
+  | "due_within_24h"
+  | "due_within_3d"
+  | "due_within_7d"
+  | "due_later"
+  | "no_due"
+  | "fits_window"
+  | "slightly_over_window"
+  | "too_large_for_window"
+  | "estimate_unknown_long_window"
+  | "estimate_unknown_medium_window"
+  | "estimate_unknown_short_window"
+  | "priority_high"
+  | "priority_medium"
+  | "priority_low"
+  | "priority_missing"
+  | "assignment_without_task"
+  | "continuity_doing"
+  | "continuity_paused"
+  | "checklist_progress";
+
+export type DecisionScore = {
+  raw: number;
+  urgency: number;
+  freeTimeFit: number;
+  priority: number;
+  continuity: number;
+};
+
+export type LastSafeStart = {
+  status: "scheduled" | "at_risk";
+  startAt: IsoDateTime | null;
+  remainingMinutes: number;
+  availableMinutes: number;
+};
+
+export type DecisionResult = {
+  candidateId: string;
+  kind: DecisionCandidateKind;
+  taskId: EntityId | null;
+  assignmentId: EntityId | null;
+  title: string;
+  notes: string | null;
+  estimatedMinutes: number | null;
+  priority: number | null;
+  status: StudyTaskStatus | null;
+  dueAt: IsoDateTime | null;
+  dueOn: string | null;
+  dueTimezone: string | null;
+  createdAt: IsoDateTime;
+  steps: TaskStep[];
+  focusable: boolean;
+  score: DecisionScore;
+  reasonCodes: DecisionReasonCode[];
+  reasons: string[];
+  availableMinutes: number | null;
+  lastSafeStart: LastSafeStart | null;
+  nextRecalculationAt: IsoDateTime | null;
 };
 
 export type ScheduleOccurrence = Omit<StudyEvent, "createdAt" | "updatedAt"> & {

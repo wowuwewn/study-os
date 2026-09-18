@@ -133,11 +133,24 @@ PIP/Pet mode transitions never create a new focus session.
 
 ## Decision Engine
 
-- Implement rules-based v1 before AI.
+- Rules-based v1 is the approved implementation; AI scheduling is out of scope.
 - Goal is one recommended Current Quest, not a ranked dashboard full of options.
-- Consider urgency, importance, estimated duration, free time until next fixed event, progress, and focus state.
-- Recommendation reason should be visible/explainable.
-- Last Safe Start is a later extension.
+- Candidates are unfinished StudyTasks and virtual open Assignments without an executable linked StudyTask. Fixed Events and recurring classes are free-time constraints, not candidates.
+- The 100-point score is urgency 45, fit before the next fixed schedule 25, normalized priority 20, and continuity/checklist progress 10. `now` is injected into the pure scorer.
+- A running or paused FocusSession hard-locks its task. Without active focus, a valid current recommendation changes only when a challenger is at least 8 points higher; initial ties are deterministic.
+- Under 15 minutes before the next fixed item, return non-focusable `prepare_next_event` instead of starting a new task.
+- DecisionResult retains raw component scores and reason codes, while user-facing Main/PIP copy shows at most three reasons and never exposes the raw score.
+- Starting a virtual Assignment recommendation lazily and atomically creates/reuses an executable StudyTask linked by `assignment_id`; the two domains remain separate.
+- Last Safe Start v0.1 uses deadline minus remaining estimated work across fixed-busy schedule windows. It preserves source-local DATE-only semantics and returns no timestamp when estimate or deadline is missing.
+
+## Week, Tasks, and Focus Stats
+
+- Week is a Monday–Sunday read surface over recurring Semester occurrences, one-off Events, open Assignments, and unfinished StudyTask deadlines. It does not auto-schedule study blocks.
+- An open Assignment is hidden when an executable linked StudyTask exists; Assignment and StudyTask remain separate records.
+- Tasks is one user-facing list with overdue, today, this week, later, no deadline, and completed groups. Assignment priority/estimate remain StudyTask concerns, so a virtual Assignment exposes deadline/status actions and receives task-specific fields only after Start materializes it.
+- Tasks Start checks for an active FocusSession before Assignment materialization. The database single-active constraint remains the final concurrency guard.
+- Focus statistics are derived from persisted running intervals, not total wall-clock session span. Local Monday/week and midnight boundaries are applied at the UI/service boundary, and paused/offline time is excluded.
+- Week/Tasks retain the approved Main titlebar, navigation, warm palette, typography, and two-column hierarchy. Acrylic/transparency behavior is unchanged.
 
 ## e-Campus integration
 
@@ -171,11 +184,9 @@ Current priority order after the schedule foundation:
 2. e-Campus/iCal integration
 3. sync/dedup/reconciliation
 4. Calendar
-5. Decision Engine v1
-6. Last Safe Start
-7. Week / Tasks
-8. Windows production polish
-9. final Danwoong animation
-10. optional AI enhancements
+5. Week / Tasks
+6. Windows production polish
+7. final Danwoong animation
+8. optional AI enhancements
 
 Notes is intentionally lower priority.

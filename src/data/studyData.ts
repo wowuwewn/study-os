@@ -6,6 +6,7 @@ import {
   studyTaskRepository,
 } from "./repositories";
 import { listTodaySchedule } from "../features/schedule/service";
+import { loadDecisionResult } from "../features/decision-engine/service";
 
 export const STUDY_DATA_CHANGED_EVENT = "study-os-data-changed";
 export const FOCUS_COMMAND_EVENT = "study-os-focus-command";
@@ -14,21 +15,21 @@ export type FocusCommand = { action: "toggle" | "complete" };
 
 export async function loadStudyDashboard(options?: {
   recoverRunningSessions?: boolean;
+  now?: Date;
 }): Promise<StudyDashboard> {
   await initializeStudyDatabase(options);
+  const now = options?.now ?? new Date();
   const [timelineEvents, currentQuest, openTasks, activeFocusSession] = await Promise.all([
-    listTodaySchedule(),
-    studyTaskRepository.getCurrentQuest(),
+    listTodaySchedule(now),
+    loadDecisionResult(now),
     studyTaskRepository.listOpen(),
     focusSessionRepository.getActive(),
   ]);
 
-  if (!currentQuest) throw new Error("Study OS has no current quest");
-
   return {
     timelineEvents,
     currentQuest,
-    todayTasks: openTasks.filter((task) => task.id !== currentQuest.id).slice(0, 3),
+    todayTasks: openTasks.filter((task) => task.id !== currentQuest?.taskId).slice(0, 3),
     activeFocusSession,
   };
 }

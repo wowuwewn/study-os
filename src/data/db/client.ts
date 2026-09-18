@@ -1,5 +1,9 @@
 import Database from "@tauri-apps/plugin-sql";
-import { RECOVER_RUNNING_SESSIONS_SQL, RECOVER_RUNNING_TASKS_SQL } from "./sql";
+import {
+  RECOVER_RUNNING_INTERVALS_SQL,
+  RECOVER_RUNNING_SESSIONS_SQL,
+  RECOVER_RUNNING_TASKS_SQL,
+} from "./sql";
 import {
   SAMPLE_SEED_KEY,
   SAMPLE_SEED_STATEMENTS,
@@ -74,6 +78,7 @@ export async function initializeStudyDatabase(options?: {
 
   const database = await getDatabase();
   const now = utcNow();
+  await database.execute(RECOVER_RUNNING_INTERVALS_SQL);
   await database.execute(RECOVER_RUNNING_TASKS_SQL, [now]);
   await database.execute(RECOVER_RUNNING_SESSIONS_SQL, [now]);
 }

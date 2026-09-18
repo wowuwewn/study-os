@@ -1,6 +1,7 @@
 import {
   SqliteAssignmentRepository,
   SqliteCourseRepository,
+  SqliteDecisionStateRepository,
   SqliteEventRepository,
   SqliteFocusSessionRepository,
   SqliteRecurringScheduleRepository,
@@ -12,6 +13,7 @@ import {
 
 export const sourceRepository = new SqliteSourceRepository();
 export const courseRepository = new SqliteCourseRepository();
+export const decisionStateRepository = new SqliteDecisionStateRepository();
 export const eventRepository = new SqliteEventRepository();
 export const assignmentRepository = new SqliteAssignmentRepository();
 export const studyTaskRepository = new SqliteStudyTaskRepository();
@@ -23,6 +25,7 @@ export const scheduleExceptionRepository = new SqliteScheduleExceptionRepository
 export type {
   AssignmentRepository,
   CourseRepository,
+  DecisionStateRepository,
   EventRepository,
   FocusSessionRepository,
   RecurringScheduleRepository,

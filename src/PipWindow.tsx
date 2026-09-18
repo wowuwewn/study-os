@@ -31,6 +31,15 @@ import {
   type FocusCommand,
 } from "./data/studyData";
 import { useStudyDashboard } from "./data/useStudyDashboard";
+import { materializeDecisionTask } from "./features/decision-engine/service";
+import {
+  PIP_VISIBILITY_REQUEST_EVENT,
+  readAuxiliaryVisibility,
+  readPipMode,
+  setAuxiliaryWindowVisibility,
+  type VisibilityRequest,
+  writePipMode,
+} from "./windowVisibility";
 
 type PipMode = "compact" | "expanded";
 
@@ -99,7 +108,10 @@ async function clampPipToWorkArea() {
 }
 
 export default function PipWindow() {
-  const [pipMode, setPipMode] = useState<PipMode>("compact");
+  const [pipMode, setPipMode] = useState<PipMode>(() => {
+    const stored = readPipMode();
+    return stored === "expanded" ? "expanded" : "compact";
+  });
   const [sessionState, setSessionState] = useState<SessionState>("idle");
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [focusSession, setFocusSession] = useState<FocusSession | null>(null);
@@ -112,6 +124,10 @@ export default function PipWindow() {
   const recoveryAnnouncedRef = useRef(false);
   const toggleSessionRef = useRef<() => Promise<void>>(async () => undefined);
   const completeQuestRef = useRef<() => Promise<void>>(async () => undefined);
+  const visibilityRequestRef = useRef<VisibilityRequest>({
+    visible: readAuxiliaryVisibility().pip,
+    requestId: 0,
+  });
 
   const currentQuest = dashboard?.currentQuest;
   const totalSeconds = (currentQuest?.estimatedMinutes ?? 45) * 60;
@@ -185,6 +201,31 @@ export default function PipWindow() {
     const cleanups: Array<() => void> = [];
     let cancelled = false;
 
+    const showPip = async (requestId: number) => {
+      const isCurrent = () => {
+        const request = visibilityRequestRef.current;
+        return request.visible && request.requestId === requestId;
+      };
+      if (!isCurrent()) return;
+      const storedMode = readPipMode();
+      const safeMode: PipMode = storedMode === "expanded" ? "expanded" : "compact";
+      const windows = await getAllWindows();
+      const petWindow = windows.find((appWindow) => appWindow.label === "pet");
+      const currentWindow = getCurrentWindow();
+      setPipMode(safeMode);
+      if (storedMode === "pet") writePipMode("compact");
+      await petWindow?.hide();
+      await currentWindow.setSize(new LogicalSize(PIP_WIDTH, PIP_HEIGHT[safeMode]));
+      if (!isCurrent()) return;
+      await currentWindow.show();
+      if (!isCurrent()) {
+        await currentWindow.hide();
+        return;
+      }
+      await clampPipToWorkArea();
+      await currentWindow.setFocus();
+    };
+
     void listen(PET_STATE_REQUEST_EVENT, () => {
       void emitTo("pet", PET_STATE_EVENT, snapshotRef.current).catch(() => undefined);
     }).then((cleanup) => (cancelled ? cleanup() : cleanups.push(cleanup)));
@@ -195,14 +236,55 @@ export default function PipWindow() {
       const currentWindow = getCurrentWindow();
       const petPosition = await petWindow?.outerPosition();
 
+      if (!visibilityRequestRef.current.visible) {
+        await Promise.all([currentWindow.hide(), petWindow?.hide()]);
+        return;
+      }
+
       setPipMode("compact");
+      writePipMode("compact");
       await currentWindow.setSize(new LogicalSize(PIP_WIDTH, PIP_HEIGHT.compact));
       if (petPosition) await currentWindow.setPosition(petPosition);
       await currentWindow.show();
+      if (!visibilityRequestRef.current.visible) {
+        await Promise.all([currentWindow.hide(), petWindow?.hide()]);
+        return;
+      }
       await clampPipToWorkArea();
       await currentWindow.setFocus();
       await petWindow?.hide();
     }).then((cleanup) => (cancelled ? cleanup() : cleanups.push(cleanup)));
+
+    void (async () => {
+      const closeCleanup = await getCurrentWindow().onCloseRequested((event) => {
+        event.preventDefault();
+        void setAuxiliaryWindowVisibility("pip", false);
+      });
+      if (cancelled) {
+        closeCleanup();
+        return;
+      }
+      cleanups.push(closeCleanup);
+
+      const visibilityCleanup = await listen<VisibilityRequest>(PIP_VISIBILITY_REQUEST_EVENT, (event) => {
+        if (event.payload.requestId < visibilityRequestRef.current.requestId) return;
+        visibilityRequestRef.current = event.payload;
+        if (event.payload.visible) void showPip(event.payload.requestId);
+        else {
+          void getAllWindows().then((windows) => Promise.all(
+            windows
+              .filter((appWindow) => appWindow.label === "pip" || appWindow.label === "pet")
+              .map((appWindow) => appWindow.hide()),
+          ));
+        }
+      });
+      if (cancelled) {
+        visibilityCleanup();
+        return;
+      }
+      cleanups.push(visibilityCleanup);
+      if (visibilityRequestRef.current.visible) void showPip(visibilityRequestRef.current.requestId);
+    })();
 
     return () => {
       cancelled = true;
@@ -229,20 +311,28 @@ export default function PipWindow() {
   const changePipMode = async (mode: PipMode) => {
     if (mode === pipMode) return;
     setPipMode(mode);
+    writePipMode(mode);
     await getCurrentWindow().setSize(new LogicalSize(PIP_WIDTH, PIP_HEIGHT[mode]));
     await clampPipToWorkArea();
   };
 
   const enterPetMode = async () => {
+    if (!visibilityRequestRef.current.visible) return;
     const currentWindow = getCurrentWindow();
     const windows = await getAllWindows();
     const petWindow = windows.find((appWindow) => appWindow.label === "pet");
     if (!petWindow) return;
 
     const position = await currentWindow.outerPosition();
+    writePipMode("pet");
     await emitTo("pet", PET_STATE_EVENT, snapshotRef.current);
     await petWindow.setPosition(position);
+    if (!visibilityRequestRef.current.visible) return;
     await petWindow.show();
+    if (!visibilityRequestRef.current.visible) {
+      await Promise.all([petWindow.hide(), currentWindow.hide()]);
+      return;
+    }
     await petWindow.setFocus();
     await currentWindow.hide();
   };
@@ -255,15 +345,17 @@ export default function PipWindow() {
         const elapsed = syncElapsedTime();
         const paused = await focusSessionRepository.pause(
           focusSession.id,
-          focusSession.taskId,
           elapsed,
         );
         setFocusSession(paused);
         setSessionState("paused");
       } else {
         const running = focusSession?.status === "paused"
-          ? await focusSessionRepository.resume(focusSession.id, focusSession.taskId)
-          : await focusSessionRepository.startOrResume(currentQuest, elapsedSecondsRef.current);
+          ? await focusSessionRepository.resume(focusSession.id)
+          : await focusSessionRepository.startOrResume(
+            await materializeDecisionTask(currentQuest),
+            elapsedSecondsRef.current,
+          );
         setFocusSession(running);
         lastTickAt.current = Date.now();
         setSessionState("running");
@@ -284,9 +376,13 @@ export default function PipWindow() {
     setElapsedSeconds(totalSeconds);
     try {
       if (focusSession) {
-        await focusSessionRepository.complete(focusSession.id, focusSession.taskId, totalSeconds);
+        await focusSessionRepository.complete(focusSession.id, totalSeconds);
+      } else if (currentQuest.taskId) {
+        await studyTaskRepository.setStatus(currentQuest.taskId, "done");
       } else {
-        await studyTaskRepository.setStatus(currentQuest.id, "done");
+        setSessionState("idle");
+        setIsFocusMutationPending(false);
+        return;
       }
       await notifyStudyDataChanged();
       completionTimer.current = window.setTimeout(() => {
@@ -317,7 +413,7 @@ export default function PipWindow() {
 
     setIsFocusMutationPending(true);
     void focusSessionRepository
-      .pause(focusSession.id, focusSession.taskId, elapsedSeconds)
+      .pause(focusSession.id, elapsedSeconds)
       .then((paused) => {
         setFocusSession(paused);
         return notifyStudyDataChanged();
@@ -371,14 +467,14 @@ export default function PipWindow() {
         ) : (
           <button className="pip-v02__window-button pip-v02__collapse" type="button" onClick={() => void changePipMode("compact")} aria-label="PIP 접기">⌃</button>
         )}
-        <button className="pip-v02__window-button" type="button" onClick={() => void getCurrentWindow().close()} aria-label="닫기">
+        <button className="pip-v02__window-button" type="button" onClick={() => void setAuxiliaryWindowVisibility("pip", false)} aria-label="PIP 숨기기">
           <PipIcon name="close" />
         </button>
       </div>
 
       <h1 className="pip-v02__quest-title">{currentQuest?.title ?? " "}</h1>
-      <p className="pip-v02__elapsed">{formattedProgress} / {currentQuest?.estimatedMinutes ?? 45}</p>
-      {pipMode === "expanded" && <p className="pip-v02__topic">{currentQuest?.notes ?? " "}</p>}
+      <p className="pip-v02__elapsed">{currentQuest?.focusable ? `${formattedProgress} / ${currentQuest.estimatedMinutes ?? "--"}` : "집중 불가"}</p>
+      {pipMode === "expanded" && <p className="pip-v02__topic">{currentQuest?.reasons.join(" · ") || currentQuest?.notes || " "}</p>}
 
       <div className="pip-v02__progress" aria-label={`${Math.round(progress)}% 진행`}>
         <span className="pip-v02__progress-fill" style={{ width: `${progress}%` }} />
@@ -390,7 +486,7 @@ export default function PipWindow() {
         type="button"
         onClick={() => void toggleSession()}
         aria-label={sessionState === "running" ? "일시정지" : "시작"}
-        disabled={!currentQuest || isFocusMutationPending}
+        disabled={!currentQuest?.focusable || isFocusMutationPending}
       >
         <PipIcon name={sessionState === "running" ? "pause" : "play"} />
       </button>

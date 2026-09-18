@@ -5,6 +5,14 @@ export const RECOVER_RUNNING_TASKS_SQL = `UPDATE study_tasks
     WHERE status = 'running' AND task_id IS NOT NULL
   )`;
 
+export const RECOVER_RUNNING_INTERVALS_SQL = `UPDATE focus_intervals
+  SET ended_at = (
+    SELECT updated_at FROM focus_sessions WHERE focus_sessions.id = focus_intervals.session_id
+  )
+  WHERE ended_at IS NULL AND session_id IN (
+    SELECT id FROM focus_sessions WHERE status = 'running'
+  )`;
+
 export const RECOVER_RUNNING_SESSIONS_SQL = `UPDATE focus_sessions
   SET status = 'paused', updated_at = ?1
   WHERE status = 'running'`;

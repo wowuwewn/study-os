@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { STUDY_DATA_CHANGED_EVENT } from "../../data/studyData";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import {
+  CALENDAR_VISIBILITY_REQUEST_EVENT,
+  readAuxiliaryVisibility,
+  setAuxiliaryWindowVisibility,
+  type VisibilityRequest,
+} from "../../windowVisibility";
 import type { CalendarRangeData } from "./service";
 import { loadCalendarRange } from "./service";
 import {
@@ -38,13 +45,18 @@ function formatRowMeta(row: CalendarRow, todayKey: string, selectedAgenda: boole
 }
 
 export default function CalendarWindow() {
-  const todayKey = localDateKey(new Date());
+  const [now, setNow] = useState(() => new Date());
+  const todayKey = localDateKey(now);
   const today = dateFromKey(todayKey);
   const [viewMonth, setViewMonth] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
   const [selectedDate, setSelectedDate] = useState(todayKey);
   const [data, setData] = useState<CalendarRangeData>(EMPTY_DATA);
   const [error, setError] = useState(false);
   const requestId = useRef(0);
+  const visibilityRequestRef = useRef<VisibilityRequest>({
+    visible: readAuxiliaryVisibility().calendar,
+    requestId: 0,
+  });
   const range = useMemo(
     () => monthRange(viewMonth.getFullYear(), viewMonth.getMonth()),
     [viewMonth],
@@ -63,6 +75,8 @@ export default function CalendarWindow() {
       setError(true);
     }
   }, [range]);
+  const reloadRef = useRef(reload);
+  reloadRef.current = reload;
 
   useEffect(() => {
     void reload();
@@ -77,6 +91,61 @@ export default function CalendarWindow() {
       cleanup?.();
     };
   }, [reload]);
+
+  useEffect(() => {
+    const cleanups: Array<() => void> = [];
+    let cancelled = false;
+    const reopen = async (visibilityRequestId: number) => {
+      const isCurrent = () => {
+        const request = visibilityRequestRef.current;
+        return request.visible && request.requestId === visibilityRequestId;
+      };
+      if (!isCurrent()) return;
+      const current = new Date();
+      const currentKey = localDateKey(current);
+      setNow(current);
+      setViewMonth(new Date(current.getFullYear(), current.getMonth(), 1));
+      setSelectedDate(currentKey);
+      const currentWindow = getCurrentWindow();
+      await currentWindow.show();
+      if (!isCurrent()) {
+        await currentWindow.hide();
+        return;
+      }
+      await currentWindow.setFocus();
+      void reloadRef.current();
+    };
+
+    void (async () => {
+      const closeCleanup = await getCurrentWindow().onCloseRequested((event) => {
+        event.preventDefault();
+        void setAuxiliaryWindowVisibility("calendar", false);
+      });
+      if (cancelled) {
+        closeCleanup();
+        return;
+      }
+      cleanups.push(closeCleanup);
+
+      const visibilityCleanup = await listen<VisibilityRequest>(CALENDAR_VISIBILITY_REQUEST_EVENT, (event) => {
+        if (event.payload.requestId < visibilityRequestRef.current.requestId) return;
+        visibilityRequestRef.current = event.payload;
+        if (event.payload.visible) void reopen(event.payload.requestId);
+        else void getCurrentWindow().hide();
+      });
+      if (cancelled) {
+        visibilityCleanup();
+        return;
+      }
+      cleanups.push(visibilityCleanup);
+      if (visibilityRequestRef.current.visible) void reopen(visibilityRequestRef.current.requestId);
+    })();
+
+    return () => {
+      cancelled = true;
+      cleanups.forEach((cleanup) => cleanup());
+    };
+  }, []);
 
   const cells = monthDays(viewMonth.getFullYear(), viewMonth.getMonth());
   const itemDates = useMemo(() => {
@@ -128,6 +197,12 @@ export default function CalendarWindow() {
           <button type="button" aria-label="이전 달" onClick={() => moveMonth(-1)}>‹</button>
           <button type="button" aria-label="다음 달" onClick={() => moveMonth(1)}>›</button>
         </div>
+        <button
+          className="calendar-close"
+          type="button"
+          aria-label="Calendar 숨기기"
+          onClick={() => void setAuxiliaryWindowVisibility("calendar", false)}
+        >×</button>
       </header>
 
       <div className="calendar-weekdays" aria-hidden="true">
