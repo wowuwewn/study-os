@@ -189,6 +189,41 @@ Code assumptions and fail-closed policy:
 - Missing-item reconciliation may only be considered after all four gates are independently true: successful fetch with representation content, complete parse/apply without partial-processing signals, provider authority confirmed by an applicable official contract, and an explicit local enablement decision. The authority gate is currently false, so the database flag alone cannot authorize deletion.
 - Explicit provider cancellation and same-UID type reclassification remain separate update signals. Mere absence never tombstones Event, Assignment, recurring rule, exception, Course, or manual data.
 
+## M02 authenticated Assignment enrichment gate
+
+Decision date: 2026-09-23. Status: `NOT READY`; no authenticated detail-enrichment implementation may start until all three Gate A conditions are independently proven.
+
+Approved scope, if the gate is later satisfied:
+
+- Enrich only `description`, `points`, and `submissionType` from the exact Canvas Assignment identified by `course_id + assignment_id`.
+- Keep iCal-owned fields, deletion reconciliation, UI redesign, Notes/AI, and notifications out of M02.
+- Never request a user-entered Personal Access Token, embed a client secret in the desktop app or repository, store a password, bypass SSO/2FA/CAPTCHA, scrape without authorization, or use title/due-date fuzzy matching.
+
+Gate A-1 — official and permitted Dankook Canvas API path: `UNPROVEN`.
+
+- Dankook's [official e-Campus entry](https://nlms.dankook.ac.kr/login?type=general) and [official LMS notice](https://gslp.dankook.ac.kr/-23?_dku_bbs_web_BbsPortlet_action=view_message&_dku_bbs_web_BbsPortlet_bbsMessageId=102894&p_p_id=dku_bbs_web_BbsPortlet&p_p_lifecycle=0) establish that its LMS is Canvas-based, and unauthenticated responses from `https://canvas.dankook.ac.kr/api/v1/...` identify Canvas REST/OAuth endpoints. Instructure's [Assignments API](https://developerdocs.instructure.com/services/canvas/resources/assignments) documents the read-only endpoint `GET /api/v1/courses/:course_id/assignments/:id` with scope `url:GET|/api/v1/courses/:course_id/assignments/:id`; its Assignment object contains the three approved enrichment fields as `description`, `points_possible`, and `submission_types`.
+- Endpoint presence is not permission. [Canvas Developer Keys](https://developerdocs.instructure.com/services/canvas/oauth2/file.developer_keys) says institution root administrators issue institution keys and control endpoint scopes. No Dankook public policy, app-registration procedure, approved key, or approved minimal Assignment scope for Study OS was found.
+- The [Canvas OAuth overview](https://developerdocs.instructure.com/services/canvas/oauth2/file.oauth) states that multi-user applications must use OAuth and must not ask users to manually create and enter tokens. A Personal Access Token is therefore not an acceptable fallback.
+
+Gate A-2 — institution-approved OAuth/PKCE for a Windows public client: `UNPROVEN`.
+
+- Current upstream Canvas supports `client_type=public`: [the official Developer Keys resource](https://developerdocs.instructure.com/services/canvas/resources/developer_keys) says public SPA/mobile clients require PKCE, cannot use `client_credentials`, and receive short-lived access tokens with rotating refresh tokens. The reviewed upstream implementation accepts PKCE `S256` and allows an approved public Developer Key to exchange and refresh without a client secret ([authorization controller](https://github.com/instructure/canvas-lms/blob/1c9f0bb8013ed69c4f2efe11fd483025469b7e6c/app/controllers/oauth2_provider_controller.rb#L35-L49), [public-client authorization grant](https://github.com/instructure/canvas-lms/blob/1c9f0bb8013ed69c4f2efe11fd483025469b7e6c/lib/canvas/oauth/grant_types/authorization_code_with_pkce.rb#L19-L27), [public-client refresh grant](https://github.com/instructure/canvas-lms/blob/1c9f0bb8013ed69c4f2efe11fd483025469b7e6c/lib/canvas/oauth/grant_types/refresh_token.rb#L8-L35)).
+- Dankook's deployed static [OAuth overview](https://canvas.dankook.ac.kr/doc/api/file.oauth.html) and [OAuth endpoint documentation](https://canvas.dankook.ac.kr/doc/api/file.oauth_endpoints.html) report `Last-Modified: 2021-02-15` in their HTTP responses, document only the older client-secret/OOB native flow, and do not document PKCE. The runtime may be newer, but its deployed version and public-client configuration are not externally proven.
+- No institution-approved Study OS `client_id`, `client_type=public` registration, exact native redirect URI, minimal read scope, or secretless refresh contract has been obtained. A confidential key cannot be embedded in a public desktop client.
+
+Gate A-3 — explicit stable iCal Assignment to Canvas ID mapping: `UNPROVEN`.
+
+- [RFC 5545 UID](https://www.rfc-editor.org/rfc/rfc5545.html#section-3.8.4.7) identifies an iCalendar component; it does not define Canvas `course_id` or `assignment_id`. The [Canvas Calendar feed guide](https://community.instructure.com/en/kb/articles/662804-unknown) does not publish a UID/URL/X-property-to-API-ID contract.
+- The reviewed upstream feed implementation encodes the course context as `include_contexts=course_<id>` and a base Assignment ID in the calendar URL fragment and `event-assignment-<id>` UID, but an applied due-date override changes the UID to `event-assignment-override-<override_id>` ([implementation](https://github.com/instructure/canvas-lms/blob/1c9f0bb8013ed69c4f2efe11fd483025469b7e6c/app/models/calendar_event.rb#L838-L860)). This is strong implementation evidence, not a stable public contract for Dankook's unknown deployment/customizations; UID parsing alone is wrong for overrides.
+- Study OS currently hashes the feed UID into its external identity and does not persist provider `assignment_id`. Existing redacted real-feed QA retained only property-name buckets, not identifier values, so it proves classification and idempotence but not an exact crosswalk.
+
+Official next path:
+
+1. Contact the Dankook Digital Learning team through the [official e-Campus contact path](https://nlms.dankook.ac.kr/login?type=general) and obtain written confirmation from the root-account administrator or another authorized official that Study OS may use the Canvas API and receive an institution-scoped, minimal read-only public Developer Key.
+2. Obtain the approved `client_type=public` PKCE `S256` flow, exact native redirect URI, secretless code exchange and rotating refresh behavior, and data-handling/distribution conditions.
+3. Obtain a documented identifier contract for the deployed iCal feed, including Assignment overrides. After OAuth approval, validate only exact provider identifiers against the official Calendar Events/Assignments API. Require an unambiguous exact match and skip enrichment otherwise.
+4. Re-run Gate A. Only if all three conditions pass may M02 implement the three approved fields.
+
 ## Mascot motion
 
 Danwoong behavior:

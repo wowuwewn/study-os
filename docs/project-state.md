@@ -9,7 +9,8 @@ This document is the handoff snapshot for continuing Study OS in a new Codex cha
 - Latest completed iCal baseline before Calendar v0.1: `7067bdc` (`iCal 동기화 상태 UX 마무리`).
 - iCal Sync/Dedup v0.1, Calendar v0.1, auxiliary-window visibility UX, Decision Engine v1, Last Safe Start v0.1, Week v0.1, Tasks v0.1, and Focus Stats v0.1 are complete.
 - M00 stabilization is complete and committed as `7d55d08`.
-- M01 iCal authority and missing-item safety verification is complete in the current uncommitted worktree as of 2026-09-18: the reviewed official contract does not establish an authoritative full snapshot, missing-item reconciliation remains disabled, and the fail-closed behavior is covered by automated and actual Windows QA. Do not commit or push this M01 work until it is reviewed.
+- M01 iCal authority and missing-item safety verification is complete and committed as `2efee0f`: the reviewed official contract does not establish an authoritative full snapshot, missing-item reconciliation remains disabled, and the fail-closed behavior is covered by automated and actual Windows QA.
+- M02 authenticated Assignment detail enrichment is `NOT READY` after Gate A review on 2026-09-23. A standard read-only Canvas Assignment API exists and current upstream Canvas supports public-client PKCE, but no official evidence establishes a Dankook-approved public Developer Key/PKCE path or a contracted, stable iCal-to-`course_id + assignment_id` mapping. No M02 implementation was started. See `docs/decisions.md`.
 - Do not commit secrets or personal schedule URLs/data. Local databases and personal semester JSON files are ignored.
 
 ## Completed functionality
@@ -238,7 +239,7 @@ cargo clippy --all-targets -- -D warnings
 ## Not implemented yet
 
 - There is still no schedule import Settings UI or file picker; the completed actual timetable import uses the ignored local file plus the development live-import helper.
-- Authenticated e-Campus detail enrichment, login/scraping, and background synchronization are not implemented.
+- Authenticated e-Campus detail enrichment, login/scraping, and background synchronization are not implemented. M02 is blocked by the 2026-09-23 Gate A result; do not implement it until all three recorded gates are independently satisfied.
 - Missing-item deletion reconciliation remains deliberately disabled because the reviewed official semantics do not establish an authoritative full snapshot. Enabling it requires a new applicable provider contract or equivalent authoritative signal plus complete parse/apply evidence and an explicit local enablement decision. Cross-provider semantic dedup beyond exact recurring-rule reuse is not implemented.
 - Notes is not implemented; its Main tab currently shows a restrained out-of-scope placeholder.
 - Main memo is not persisted.
@@ -249,7 +250,7 @@ cargo clippy --all-targets -- -D warnings
 
 ## Next priorities
 
-1. Add authenticated e-Campus detail enrichment only for fields that iCal cannot provide, after separately approving its credential and data-handling scope.
+1. Resolve the M02 Gate A blockers through the official Dankook/Canvas administrator path before implementing authenticated e-Campus detail enrichment.
 2. Perform Windows polish and release-oriented QA.
 3. Replace the Pet placeholder with the final Danwoong animation while preserving the existing state/event contract.
 4. Add Notes only when it is separately prioritized.
