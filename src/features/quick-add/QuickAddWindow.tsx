@@ -72,6 +72,22 @@ export default function QuickAddWindow() {
     };
   }, []);
 
+  useEffect(() => {
+    let cleanup: (() => void) | undefined;
+    let cancelled = false;
+    void getCurrentWindow().onCloseRequested((event) => {
+      event.preventDefault();
+      void hide();
+    }).then((unlisten) => {
+      if (cancelled) unlisten();
+      else cleanup = unlisten;
+    });
+    return () => {
+      cancelled = true;
+      cleanup?.();
+    };
+  }, []);
+
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (status === "saving" || status === "saved") return;

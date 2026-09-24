@@ -161,6 +161,22 @@ export default function MainWindow() {
     if (error) console.error("Study OS data load failed", error);
   }, [error]);
 
+  useEffect(() => {
+    let cleanup: (() => void) | undefined;
+    let cancelled = false;
+    void getCurrentWindow().onCloseRequested((event) => {
+      event.preventDefault();
+      void getCurrentWindow().minimize();
+    }).then((unlisten) => {
+      if (cancelled) unlisten();
+      else cleanup = unlisten;
+    });
+    return () => {
+      cancelled = true;
+      cleanup?.();
+    };
+  }, []);
+
   const quest = dashboard?.currentQuest;
   const questSummary = recommendationSummary(quest?.reasons, quest?.notes);
   const timelineEvents = dashboard
@@ -190,7 +206,7 @@ export default function MainWindow() {
   const minimizeWindow = () => getCurrentWindow().minimize().catch(console.error);
   const toggleMaximize = () =>
     getCurrentWindow().toggleMaximize().catch(console.error);
-  const hideWindow = () => getCurrentWindow().hide().catch(console.error);
+  const closeToTaskbar = () => getCurrentWindow().minimize().catch(console.error);
 
   return (
     <main className="main-window">
@@ -206,7 +222,7 @@ export default function MainWindow() {
           <button type="button" aria-label="최대화 전환" onClick={toggleMaximize}>
             <MainIcon name="maximize" />
           </button>
-          <button type="button" aria-label="닫기" onClick={hideWindow}>
+          <button type="button" aria-label="닫기" onClick={closeToTaskbar}>
             <MainIcon name="close" />
           </button>
         </div>

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { emitTo, listen } from "@tauri-apps/api/event";
 import {
   currentMonitor,
@@ -154,6 +154,12 @@ export default function PetWindow() {
     }, SINGLE_CLICK_DELAY);
   };
 
+  const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    void restoreCompact();
+  };
+
   return (
     <main className={`pet-window pet-window--${snapshot.state}`}>
       <button
@@ -164,6 +170,7 @@ export default function PetWindow() {
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
+        onKeyDown={handleKeyDown}
         onContextMenu={(event) => event.preventDefault()}
       >
         <DanwoongPet state={snapshot.state} />

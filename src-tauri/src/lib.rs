@@ -212,7 +212,9 @@ pub fn run() {
             .center()
             .build()?;
 
-            app.global_shortcut().register(quick_add_shortcut())?;
+            if let Err(error) = app.global_shortcut().register(quick_add_shortcut()) {
+                eprintln!("Quick Add global shortcut is unavailable: {error}");
+            }
 
             Ok(())
         })

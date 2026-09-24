@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { STUDY_DATA_CHANGED_EVENT } from "../../data/studyData";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import {
+  currentMonitor,
+  getCurrentWindow,
+  PhysicalPosition,
+  primaryMonitor,
+} from "@tauri-apps/api/window";
 import {
   CALENDAR_VISIBILITY_REQUEST_EVENT,
   readAuxiliaryVisibility,
@@ -24,6 +29,29 @@ import {
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 const EMPTY_DATA: CalendarRangeData = { occurrences: [], assignments: [] };
+
+async function clampCalendarToWorkArea() {
+  const calendarWindow = getCurrentWindow();
+  const [position, size, activeMonitor, fallbackMonitor] = await Promise.all([
+    calendarWindow.outerPosition(),
+    calendarWindow.outerSize(),
+    currentMonitor(),
+    primaryMonitor(),
+  ]);
+  const monitor = activeMonitor ?? fallbackMonitor;
+  if (!monitor) return;
+
+  const workArea = monitor.workArea;
+  const minX = workArea.position.x;
+  const minY = workArea.position.y;
+  const maxX = Math.max(minX, minX + workArea.size.width - size.width);
+  const maxY = Math.max(minY, minY + workArea.size.height - size.height);
+  const x = Math.min(Math.max(position.x, minX), maxX);
+  const y = Math.min(Math.max(position.y, minY), maxY);
+  if (x !== position.x || y !== position.y) {
+    await calendarWindow.setPosition(new PhysicalPosition(x, y));
+  }
+}
 
 function formatShortDate(dateKey: string) {
   const date = dateFromKey(dateKey);
@@ -112,6 +140,7 @@ export default function CalendarWindow() {
         await currentWindow.hide();
         return;
       }
+      await clampCalendarToWorkArea();
       await currentWindow.setFocus();
       void reloadRef.current();
     };
