@@ -1996,6 +1996,19 @@ button {
   background: #fff;
 }
 
+.task-check:disabled {
+  cursor: wait;
+}
+
+.today-task-message {
+  position: absolute;
+  top: 188px;
+  left: 7px;
+  margin: 0;
+  color: #9b4541;
+  font-size: 12px;
+}
+
 .task-due {
   height: 28px;
   display: grid;

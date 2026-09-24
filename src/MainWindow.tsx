@@ -1,12 +1,13 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { emitTo } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { ScheduleOccurrence, StudyDashboard, StudyTask, TaskStep } from "./domain/models";
-import { setTaskStepCompleted, FOCUS_COMMAND_EVENT } from "./data/studyData";
+import { setTaskStepCompleted, notifyStudyDataChanged, FOCUS_COMMAND_EVENT } from "./data/studyData";
 import { useStudyDashboard } from "./data/useStudyDashboard";
 import { showQuickAddWindow } from "./features/quick-add/window";
 import IcalSettingsPanel from "./features/ical-sync/IcalSettingsPanel";
 import TasksView from "./features/tasks/TasksView";
+import { setTaskItemOutcome } from "./features/tasks/service";
 import WeekView from "./features/week/WeekView";
 
 type MainTab = "today" | "week" | "tasks" | "notes";
@@ -150,7 +151,27 @@ export default function MainWindow() {
   const [memo, setMemo] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [now, setNow] = useState(() => new Date());
-  const { dashboard, error } = useStudyDashboard();
+  const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
+  const [taskCompletionError, setTaskCompletionError] = useState<string | null>(null);
+  const completingTaskIdRef = useRef<string | null>(null);
+  const { dashboard, error, reload } = useStudyDashboard();
+
+  const completeTodayTask = async (taskId: string) => {
+    if (completingTaskIdRef.current) return;
+    completingTaskIdRef.current = taskId;
+    setCompletingTaskId(taskId);
+    setTaskCompletionError(null);
+    try {
+      await setTaskItemOutcome({ kind: "task", entityId: taskId }, "complete");
+      await notifyStudyDataChanged();
+      await reload();
+    } catch (reason) {
+      setTaskCompletionError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      completingTaskIdRef.current = null;
+      setCompletingTaskId(null);
+    }
+  };
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 30_000);
@@ -318,12 +339,19 @@ export default function MainWindow() {
             <ul>
               {todayTasks.map((task) => (
                 <li key={task.id}>
-                  <button className="task-check" type="button" aria-label={`${task.title} 완료`} />
+                  <button
+                    className="task-check"
+                    type="button"
+                    aria-label={`${task.title} 완료`}
+                    disabled={completingTaskId !== null}
+                    onClick={() => void completeTodayTask(task.id)}
+                  />
                   <span>{task.title}</span>
                   <small className={`task-due task-due--${task.tone}`}>{task.due}</small>
                 </li>
               ))}
             </ul>
+            {taskCompletionError && <p className="today-task-message" role="alert">{taskCompletionError}</p>}
           </section>
 
           <footer className="today-footer">지금 하는 게, 나중의 나를 만든다.</footer>

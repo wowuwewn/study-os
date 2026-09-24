@@ -13,6 +13,13 @@ This document is the handoff snapshot for continuing Study OS in a new Codex cha
 - M02 authenticated Assignment detail enrichment is `NOT READY` after Gate A review on 2026-09-23. A standard read-only Canvas Assignment API exists and current upstream Canvas supports public-client PKCE, but no official evidence establishes a Dankook-approved public Developer Key/PKCE path or a contracted, stable iCal-to-`course_id + assignment_id` mapping. No M02 implementation was started. See `docs/decisions.md`.
 - Do not commit secrets or personal schedule URLs/data. Local databases and personal semester JSON files are ignored.
 
+## Daily-use Completion 01 — Today StudyTask rows (2026-09-24)
+
+- Today now completes only the real `StudyTask` rows returned by `loadStudyDashboard()`. The row button uses the existing Tasks `setTaskItemOutcome(..., "complete")` service, including its running/paused FocusSession guard, and shows that guard's error in Today. Event, Assignment, and virtual current-quest completion paths were not changed. Rapid clicks are locked immediately while the mutation is pending.
+- A successful completion emits the existing `study-os-data-changed` event and reloads Main. Existing listeners refresh Tasks and PIP; their reads recalculate the Decision Engine. No per-window synchronization state, schema change, or Undo was added. A post-completion Undo affordance remains a possible later UX item.
+- Actual Windows Tauri dev-app QA with uniquely named temporary StudyTasks verified running and paused session conflicts without task completion, a successful Today completion, one repository status write after two immediate clicks, Main/Tasks/PIP/Decision Engine refresh, and persisted `done` status after process restart. The conflict message fit in the Today layout. Direct comparison with Figma Main node `44:216` is deferred to a separate Visual Redesign milestone because this change does not redesign the approved Main structure.
+- The live QA started from a copy of the existing SQLite database. After the app exited, the database and its WAL/SHM sidecars were restored and SHA-256 matched the pre-QA copies. The user directly verified that physical `Ctrl+Shift+Space` input opens Quick Add with input focus while Study OS is in the background. No shortcut code was changed.
+
 ## M03 unsigned Windows package QA (2026-09-24)
 
 Status: **PERSONAL-USE WINDOWS STABILIZATION; NOT RELEASE READY**. The window fixes are suitable for a personal-use commit. This was a release-regression pass, not a public-distribution approval. Code signing, SmartScreen reputation, auto-update, and Store distribution remain out of scope.
@@ -259,7 +266,7 @@ cargo clippy --all-targets -- -D warnings
 - Missing-item deletion reconciliation remains deliberately disabled because the reviewed official semantics do not establish an authoritative full snapshot. Enabling it requires a new applicable provider contract or equivalent authoritative signal plus complete parse/apply evidence and an explicit local enablement decision. Cross-provider semantic dedup beyond exact recurring-rule reuse is not implemented.
 - Notes is not implemented; its Main tab currently shows a restrained out-of-scope placeholder.
 - Main memo is not persisted.
-- Main search and Today-row completion controls remain presentation-only; task completion/cancellation is currently handled from Tasks, with active-focus lifecycle actions available through the focus surfaces.
+- Main search remains presentation-only. Today StudyTask rows can be completed; task cancellation remains in Tasks, with active-focus lifecycle actions available through the focus surfaces.
 - No schedule import/settings UI, reminders, notifications, OCR, or AI feature exists.
 - Windows production polish such as final installer behavior, accessibility audit, DPI/monitor edge-case coverage, and release packaging QA remains.
 - Pet Mode has state communication and placeholder motion, but the final Danwoong artwork/animation is not implemented.

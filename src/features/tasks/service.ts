@@ -63,7 +63,7 @@ export async function updateTaskItem(
 }
 
 export async function setTaskItemOutcome(
-  item: TaskListItem,
+  item: Pick<TaskListItem, "kind" | "entityId">,
   outcome: "complete" | "cancel",
 ): Promise<void> {
   await initializeStudyDatabase();
